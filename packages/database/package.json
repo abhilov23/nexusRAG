@@ -1,0 +1,25 @@
+{
+  "name": "@repo/database",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "prisma skills sync || exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^7.10.0",
+    "@prisma/orm-framework": "8.0.0-rc.12",
+    "@prisma/orm-postgres": "8.0.0-rc.12",
+    "dotenv": "^18.0.4"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "prisma": "8.0.0-rc.17"
+  }
+}
