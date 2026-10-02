@@ -1,5 +1,4 @@
 import {redis} from "@repo/redis";
-import {randomBytes} from "crypto";
 
 const SESSION_TTL = 60 * 60 * 24 * 7; // 7 days in seconds
 
@@ -8,9 +7,15 @@ export type Session = {
   createdAt: number;
 };
 
+function generateSessionId(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export async function createSession(userId: string): Promise<string> {
    
-    const sessionId = randomBytes(16).toString("hex");
+    const sessionId = generateSessionId();
     const session : Session = {
      userId,
      createdAt : Date.now(),

@@ -9,11 +9,25 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
   name         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  accounts     OAuthAccount[]
+}
+
+model OAuthAccount {
+  id                String @id @default(cuid())
+
+  provider          String
+  providerAccountId String
+
+  userId            String
+  user              User   @relation( fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
