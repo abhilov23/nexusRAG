@@ -66,7 +66,14 @@ export default function AuthPage() {
         setNotice("Account created successfully. Signing you in...");
         await handleLogin(email, password, redirect);
       } else if (isForgot) {
-        setNotice("If an account exists for that email, a reset link is on its way.");
+        const res = await fetch("/api/auth/forget-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to send reset link");
+        setNotice("If an account exists for that email, a reset link has been sent.");
       } else {
         await handleLogin(email, password, redirect);
       }
