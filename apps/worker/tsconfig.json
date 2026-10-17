@@ -1,0 +1,17 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "strictNullChecks": true,
+    "types": ["node"],
+    // @repo/database ships TypeScript source: Prisma 7 emits `client.ts`, not
+    // `client.js`, so NodeNext would demand an explicit `.js` extension that
+    // Turbopack cannot map back to the generated `.ts` file and the web build
+    // fails. Bundler resolution is what Next and tsx both use for this package.
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

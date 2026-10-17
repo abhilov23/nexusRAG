@@ -2,19 +2,48 @@
   "name": "nexusRAG",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:worker": "pnpm --filter worker dev",
+    "dev:ai": "uv run --project apps/ai-service uvicorn ai_service.main:app --reload --port 8000",
+    "ai:worker": "uv run --project apps/ai-service ai-service",
+    "worker": "pnpm --filter worker start",
+    "build": "turbo run build",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "check-types": "turbo run check-types",
+    "test": "turbo run test",
+    "test:ingestion": "pnpm --filter worker test:live",
+    "ai:test": "uv run --project apps/ai-service pytest",
+    "ai:lint": "uv run --project apps/ai-service ruff check apps/ai-service/src apps/ai-service/tests",
+    "ai:install": "uv sync --project apps/ai-service",
+    "env:check": "tsx scripts/check-env.mjs",
+    "db:generate": "pnpm --filter database db:generate",
+    "db:migrate": "pnpm --filter database db:migrate",
+    "db:push": "pnpm --filter database db:push",
+    "db:studio": "pnpm --filter database db:studio",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,css,yml,yaml}\""
   },
   "devDependencies": {
+    "concurrently": "^9.0.0",
     "prettier": "3.9.6",
     "turbo": "^2.11.4",
     "typescript": "7.0.2"
   },
   "packageManager": "pnpm@11.25.0",
   "engines": {
-    "node": ">=24"
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@elastic/elasticsearch": "^8.15.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@qdrant/js-client-rest": "^1.12.0",
+    "@repo/database": "workspace:*",
+    "@repo/graph": "workspace:*",
+    "@repo/redis": "workspace:*",
+    "@repo/search": "workspace:*",
+    "@repo/storage": "workspace:*",
+    "pg": "^8.13.1",
+    "tsx": "^4.19.2"
   }
 }

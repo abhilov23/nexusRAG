@@ -1,0 +1,10 @@
+node_modules
+.next
+.turbo
+.venv
+dist
+build
+coverage
+packages/database/generated
+pnpm-lock.yaml
+*.min.*

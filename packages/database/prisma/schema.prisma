@@ -1,7 +1,6 @@
-
 generator client {
     provider = "prisma-client"
-    output = "../generated/prisma"
+    output   = "../generated/prisma"
 }
 
 datasource db {
@@ -9,25 +8,117 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String?
-  name         String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+    id           String   @id @default(cuid())
+    email        String   @unique
+    passwordHash String?
+    name         String?
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
 
-  accounts     OAuthAccount[]
+    accounts OAuthAccount[]
+    settings UserSettings?
+    repositories Repository[]
 }
 
 model OAuthAccount {
-  id                String @id @default(cuid())
+    id                String @id @default(cuid())
+    provider          String
+    providerAccountId String
+    userId            String
+    user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  provider          String
-  providerAccountId String
+    @@unique([provider, providerAccountId])
+    @@index([userId])
+}
 
-  userId            String
-  user              User   @relation( fields: [userId], references: [id], onDelete: Cascade)
+/// Per-user workspace + indexing preferences backing the Settings page.
+/// Kept as a typed 1:1 table (rather than a JSON blob) so defaults, casts and
+/// future migrations stay explicit. Rows are created lazily on first write.
+model UserSettings {
+    id     String @id @default(cuid())
+    userId String @unique
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([provider, providerAccountId])
-  @@index([userId])
+    workspaceName String @default("Nexus Labs")
+    workspaceSlug String @default("nexus-labs")
+
+    defaultBranch    String  @default("main")
+    autoIndex        Boolean @default(true)
+    includeCitations Boolean @default(true)
+    indexAlerts      Boolean @default(true)
+    weeklySummary    Boolean @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+/// Lifecycle of a repository's raw archive ingestion.
+/// QUEUED -> DOWNLOADING -> UPLOADING -> INDEXING -> READY, with FAILED as the
+/// terminal error state. Retries reuse the same record, so this always reflects
+/// the most recent attempt rather than a permanent verdict.
+/// READY means vectors, lexical documents and the code graph were all written
+/// (best-effort stores may still be partial -- see errorMessage), never merely
+/// that the archive landed in object storage.
+enum RepositoryStatus {
+    QUEUED
+    DOWNLOADING
+    UPLOADING
+    INDEXING
+    READY
+    FAILED
+}
+
+/// A GitHub repository submitted for ingestion.
+///
+/// The two SHA columns are what make re-submission cheap and safe:
+///   * `latestSha` -- newest commit seen on `defaultBranch` at the last check
+///   * `commitSha`  -- commit whose archive is actually stored in R2
+/// A repository needs (re-)ingestion exactly when `latestSha != commitSha`,
+/// which lets the caller skip work for unchanged repositories.
+///
+/// `storageKey` points at the archive in Cloudflare R2. The archive itself is
+/// never held in PostgreSQL or Redis.
+model Repository {
+    id     String @id @default(cuid())
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    /// Canonical https://github.com/{owner}/{name}
+    githubUrl String
+    owner     String
+    name      String
+
+    defaultBranch String?
+
+    /// Newest commit observed on defaultBranch during the last GitHub check.
+    latestSha String?
+
+    /// Commit whose archive is currently stored in R2. Null until first success.
+    commitSha String?
+
+    /// R2 object key: repositories/{userId}/{id}/{commitSha}.tar.gz
+    storageKey String?
+
+    /// Size of the downloaded archive in bytes.
+    sizeBytes Int?
+
+    /// GitHub's last push timestamp; a cheap secondary change signal.
+    pushedAt DateTime?
+
+    license     String?
+    description String?
+
+    status       RepositoryStatus @default(QUEUED)
+    errorMessage String?
+    lastIngestedAt DateTime?
+
+    /// Dominant chunk language measured at index time (e.g. "python").
+    /// Null until the indexing stage reports back.
+    language String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([userId, owner, name])
+    @@index([userId])
+    @@index([status])
 }

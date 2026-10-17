@@ -8,13 +8,9 @@ function getResendClient() {
   return new Resend(apiKey);
 }
 
-export async function sendPasswordResetEmail(
-  email: string,
-  token: string
-) {
+export async function sendPasswordResetEmail(email: string, token: string) {
   const resend = getResendClient();
-  const resetUrl =
-    `${process.env.APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const resetUrl = `${process.env.APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
 
   await resend.emails.send({
     from: process.env.EMAIL_FROM!,

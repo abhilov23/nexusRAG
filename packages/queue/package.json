@@ -1,0 +1,29 @@
+{
+  "name": "@repo/queue",
+  "version": "1.0.0",
+  "description": "BullMQ queues and typed job payloads",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@repo/redis": "workspace:*",
+    "bullmq": "^5.34.0",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "eslint": "9.39.5",
+    "typescript": "7.0.2"
+  }
+}

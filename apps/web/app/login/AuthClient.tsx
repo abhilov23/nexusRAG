@@ -16,6 +16,11 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/app/context/ThemeContext";
 import { useSearchParams, useRouter } from "next/navigation";
+import { Logo } from "@/components/app/brand";
+import { cn } from "@/lib/utils";
+
+const inputCls =
+  "flex h-11 items-center gap-2.5 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3.5 text-[13.5px] text-[var(--nx-ink)] transition-colors focus-within:border-[var(--nx-ink)]";
 
 export default function AuthPage() {
   const { theme, toggleTheme } = useTheme();
@@ -25,8 +30,8 @@ export default function AuthPage() {
     searchParams.get("mode") === "signup"
       ? "signup"
       : searchParams.get("mode") === "forgot"
-      ? "forgot"
-      : "login";
+        ? "forgot"
+        : "login";
   const redirect = searchParams.get("redirect") || "/workspace";
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -36,13 +41,9 @@ export default function AuthPage() {
   const title = isForgot
     ? "Reset your password"
     : isSignup
-    ? "Build with your codebase."
-    : "Welcome back.";
-  const submitLabel = isForgot
-    ? "Send reset link"
-    : isSignup
-    ? "Create account"
-    : "Sign in";
+      ? "Create your account"
+      : "Welcome back.";
+  const submitLabel = isForgot ? "Send reset link" : isSignup ? "Create account" : "Sign in";
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
@@ -103,114 +104,129 @@ export default function AuthPage() {
   };
 
   return (
-    <main className={`auth-page nexus-app ${theme === "light" ? "light-app" : ""}`}>
-      <section className="auth-story">
-        <Link className="auth-brand" href="/">
-          <span className="brand-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>
-            nexus<span>rag</span>
-          </span>
+    <main className="grid min-h-screen bg-[var(--nx-bg)] text-[var(--nx-ink)] lg:grid-cols-2">
+      <section className="hidden flex-col justify-between border-r border-[var(--nx-border)] bg-[var(--nx-surface)] p-10 lg:flex">
+        <Link href="/" aria-label="NexusRAG home">
+          <Logo />
         </Link>
-        <div className="auth-story-content">
-          <span className="auth-overline">THE CONTEXT LAYER FOR YOUR CODE</span>
-          <h1>
-            Make your entire codebase <em>conversational.</em>
-          </h1>
-          <p>
-            One calm place to understand, search, and reason across every
-            repository your team builds.
+        <div className="max-w-[440px]">
+          <p className="font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
+            The context layer for your code
           </p>
-          <div className="auth-story-rule" />
-          <div className="auth-proof">
-            <ShieldCheck size={16} />
-            <span>Private by design. Grounded in your source.</span>
+          <h1 className="font-display mt-3 text-[clamp(30px,3.4vw,44px)] leading-[1.04] font-semibold tracking-[-0.03em] text-balance">
+            Make your entire codebase conversational.
+          </h1>
+          <p className="mt-3 max-w-[40ch] text-[14px] leading-relaxed text-[var(--nx-muted)]">
+            One calm place to understand, search, and reason across every repository your team
+            builds.
+          </p>
+          <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-border)] font-mono text-[11px]">
+            {[
+              ["DOC → CHUNK", "Tree-sitter code-aware chunks"],
+              ["VECTOR · LEXICAL · GRAPH", "Hybrid retrieval, fused"],
+              ["ANSWER + [S1]", "Every claim cited to a file"],
+            ].map((row) => (
+              <div
+                key={row[0]}
+                className="flex items-center justify-between gap-3 bg-[var(--nx-surface)] px-4 py-3"
+              >
+                <span className="text-[var(--nx-ink)]">{row[0]}</span>
+                <span className="truncate text-[var(--nx-faint)]">{row[1]}</span>
+              </div>
+            ))}
           </div>
+          <p className="mt-6 flex items-center gap-2 text-[12.5px] text-[var(--nx-muted)]">
+            <ShieldCheck size={15} />
+            Private by design. Grounded in your source.
+          </p>
         </div>
-        <div className="auth-story-footer">
-          <span>© 2025 NexusRAG</span>
-          <span>Built for curious teams.</span>
-        </div>
-        <div className="auth-graphic">
-          <div className="graphic-ring ring-a" />
-          <div className="graphic-ring ring-b" />
-          <div className="graphic-ring ring-c" />
-          <span className="graphic-node node-a" />
-          <span className="graphic-node node-b" />
-          <span className="graphic-node node-c" />
-        </div>
+        <p className="flex items-center justify-between font-mono text-[10.5px] tracking-[0.08em] text-[var(--nx-faint)] uppercase">
+          <span>© 2026 NexusRAG</span>
+          <span>Retrieval first · Grounded always</span>
+        </p>
       </section>
-      <section className="auth-form-side">
-        <button
-          className="auth-theme-toggle"
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-        >
-          {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-        </button>
-        <div className="auth-mobile-brand">
-          <Link className="auth-brand" href="/">
-            <span className="brand-mark">
-              <span />
-              <span />
-            </span>
-            <span>
-              nexus<span>rag</span>
-            </span>
+
+      <section className="relative flex flex-col px-5 py-6 sm:px-10">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl px-2 text-[12.5px] text-[var(--nx-muted)] hover:bg-[var(--nx-raised)] hover:text-[var(--nx-ink)] lg:hidden"
+          >
+            <Logo />
           </Link>
-        </div>
-        <div className="auth-form-wrap">
-          <Link className="auth-back" href="/">
+          <Link
+            href="/"
+            className="hidden items-center gap-1.5 text-[12.5px] text-[var(--nx-muted)] hover:text-[var(--nx-ink)] lg:inline-flex"
+          >
             <ArrowLeft size={14} />
             Back to home
           </Link>
-          <span className="auth-kicker">
+          <button
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            className="grid size-9 place-items-center rounded-xl border border-[var(--nx-border)] text-[var(--nx-muted)] hover:border-[var(--nx-border-strong)] hover:text-[var(--nx-ink)]"
+          >
+            {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
+        </div>
+
+        <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-10">
+          <p className="font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
             {isForgot
-              ? "ACCOUNT RECOVERY"
+              ? "Account recovery"
               : isSignup
-              ? "START YOUR WORKSPACE"
-              : "SIGN IN TO YOUR WORKSPACE"}
-          </span>
-          <h2>{title}</h2>
-          <p className="auth-subtitle">
+                ? "Start your workspace"
+                : "Sign in to your workspace"}
+          </p>
+          <h2 className="font-display mt-2 text-[30px] font-semibold tracking-[-0.02em]">
+            {title}
+          </h2>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--nx-muted)]">
             {isForgot
               ? "Enter the email tied to your account and we'll send you a secure reset link."
               : isSignup
-              ? "Create an account to start exploring your code with context."
-              : "Pick up where you left off. Your repositories are waiting."}
+                ? "Create an account to start exploring your code with context."
+                : "Pick up where you left off. Your repositories are waiting."}
           </p>
+
           {error && (
-            <div className="auth-error" role="alert">
-              <span>
-                <AlertCircle size={15} />
-              </span>
+            <div
+              className="mt-5 flex items-start gap-2.5 rounded-xl border border-[var(--nx-bad)] bg-[color-mix(in_srgb,var(--nx-bad)_8%,transparent)] px-3.5 py-3 text-[13px] text-[var(--nx-bad)]"
+              role="alert"
+            >
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
               {error}
             </div>
           )}
           {notice && !error && (
-            <div className="auth-success" role="status">
+            <div
+              className="mt-5 flex items-start gap-2.5 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3.5 py-3 text-[13px] text-[var(--nx-ink)]"
+              role="status"
+            >
+              <Check size={15} className="mt-0.5 shrink-0" />
               <span>
-                <Check size={15} />
+                {notice}
+                {isForgot && (
+                  <button
+                    onClick={() => setNotice("")}
+                    className="ml-2 underline underline-offset-2"
+                  >
+                    Try another email
+                  </button>
+                )}
               </span>
-              {notice}
-              {isForgot && (
-                <button onClick={() => setNotice("")}>Try another email</button>
-              )}
             </div>
           )}
+
           {!isForgot && (
             <>
               <button
-                className="github-button"
-                onClick={() =>
-                  setError(
-                    "GitHub sign-in will be available when authentication is connected.",
-                  )
-                }
+                onClick={() => {
+                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                  window.location.href = "/api/auth/github";
+                }}
                 disabled={loading}
+                className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface)] text-[13.5px] font-semibold transition-colors hover:border-[var(--nx-border-strong)] disabled:opacity-50"
               >
                 <svg
                   aria-hidden="true"
@@ -223,74 +239,82 @@ export default function AuthPage() {
                 </svg>
                 Continue with GitHub
               </button>
-              <div className="auth-divider">
-                <span />
+              <div className="my-5 flex items-center gap-3 font-mono text-[10px] tracking-[0.14em] text-[var(--nx-faint)] uppercase">
+                <span className="h-px flex-1 bg-[var(--nx-border)]" />
                 or continue with email
-                <span />
+                <span className="h-px flex-1 bg-[var(--nx-border)]" />
               </div>
             </>
           )}
-          <form className="auth-form" onSubmit={handleSubmit}>
+
+          <form onSubmit={handleSubmit} className={cn("grid gap-3", isForgot && "mt-5")}>
             {isSignup && (
-              <label>
+              <label className="block text-[12.5px] font-semibold">
                 Full name
-                <div className="auth-input">
+                <div className={cn(inputCls, "mt-1.5")}>
                   <input
                     name="name"
                     autoComplete="name"
                     placeholder="Your name"
                     required
+                    className="w-full bg-transparent outline-none placeholder:text-[var(--nx-faint)]"
                   />
                 </div>
               </label>
             )}
-            <label>
+            <label className="block text-[12.5px] font-semibold">
               Email address
-              <div className="auth-input">
-                <Mail size={15} />
+              <div className={cn(inputCls, "mt-1.5")}>
+                <Mail size={15} className="shrink-0 text-[var(--nx-faint)]" />
                 <input
                   name="email"
                   type="email"
                   autoComplete="email"
                   placeholder="you@company.com"
                   required
+                  className="w-full bg-transparent outline-none placeholder:text-[var(--nx-faint)]"
                 />
               </div>
             </label>
             {!isForgot && (
-              <label>
+              <label className="block text-[12.5px] font-semibold">
                 Password
-                <div className="auth-input">
-                  <KeyRound size={15} />
+                <div className={cn(inputCls, "mt-1.5")}>
+                  <KeyRound size={15} className="shrink-0 text-[var(--nx-faint)]" />
                   <input
                     name="password"
                     type="password"
-                    autoComplete={
-                      isSignup ? "new-password" : "current-password"
-                    }
-                    placeholder={
-                      isSignup
-                        ? "At least 8 characters"
-                        : "Enter your password"
-                    }
+                    autoComplete={isSignup ? "new-password" : "current-password"}
+                    placeholder={isSignup ? "At least 8 characters" : "Enter your password"}
                     minLength={8}
                     required
+                    className="w-full bg-transparent outline-none placeholder:text-[var(--nx-faint)]"
                   />
                 </div>
               </label>
             )}
             {!isForgot && !isSignup && (
-              <div className="auth-inline">
-                <label className="remember-option">
-                  <input type="checkbox" /> Remember me
-                </label>
-                <Link href="/login?mode=forgot">Forgot password?</Link>
+              <div className="flex items-center justify-between text-[12.5px]">
+                <span className="text-[var(--nx-faint)]">
+                  Protected by rate limits + CSRF checks.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => switchMode("forgot")}
+                  className="font-medium underline underline-offset-2 hover:text-[var(--nx-muted)]"
+                >
+                  Forgot password?
+                </button>
               </div>
             )}
-            <button className="auth-submit" type="submit" disabled={loading}>
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-1 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--nx-signal)] text-[13.5px] font-semibold text-[var(--nx-signal-ink)] transition-opacity hover:opacity-85 disabled:opacity-50"
+            >
               {loading ? (
                 <>
-                  <Loader2 size={15} className="spin" />
+                  <Loader2 size={15} className="animate-spin" />
                   {submitLabel}
                 </>
               ) : (
@@ -300,48 +324,53 @@ export default function AuthPage() {
                 </>
               )}
             </button>
-            {isSignup && (
-              <p className="auth-terms">
-                By creating an account, you agree to our{" "}
-                <button type="button">Terms</button> and{" "}
-                <button type="button">Privacy Policy</button>.
-              </p>
-            )}
           </form>
-          <div className="auth-switch">
+
+          <p className="mt-5 text-center text-[13px] text-[var(--nx-muted)]">
             {isForgot ? (
               <>
                 Remembered your password?{" "}
-                <Link href="/login" onClick={(e) => { e.preventDefault(); switchMode("login"); }}>
+                <button
+                  onClick={() => switchMode("login")}
+                  className="font-semibold text-[var(--nx-ink)] hover:underline"
+                >
                   Sign in
-                </Link>
+                </button>
               </>
             ) : isSignup ? (
               <>
                 Already have an account?{" "}
-                <Link href="/login" onClick={(e) => { e.preventDefault(); switchMode("login"); }}>
+                <button
+                  onClick={() => switchMode("login")}
+                  className="font-semibold text-[var(--nx-ink)] hover:underline"
+                >
                   Sign in
-                </Link>
+                </button>
               </>
             ) : (
               <>
                 New to NexusRAG?{" "}
-                <Link href="/login?mode=signup" onClick={(e) => { e.preventDefault(); switchMode("signup"); }}>
+                <button
+                  onClick={() => switchMode("signup")}
+                  className="font-semibold text-[var(--nx-ink)] hover:underline"
+                >
                   Create an account
-                </Link>
+                </button>
               </>
             )}
-          </div>
-          <div className="auth-secure">
+          </p>
+          <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11.5px] text-[var(--nx-faint)]">
             <ShieldCheck size={13} />
-            Your code stays yours. NexusRAG never trains on private
-            repositories.
-          </div>
+            Your code stays yours. NexusRAG never trains on private repositories.
+          </p>
         </div>
-        <footer className="auth-form-footer">
-          <span>© 2025 NexusRAG</span>
-          <a href="mailto:hello@nexusrag.dev">Need help?</a>
-        </footer>
+
+        <p className="flex items-center justify-between font-mono text-[10px] tracking-[0.08em] text-[var(--nx-faint)] uppercase">
+          <span>© 2026 NexusRAG</span>
+          <a href="mailto:hello@nexusrag.dev" className="hover:text-[var(--nx-ink)]">
+            Need help?
+          </a>
+        </p>
       </section>
     </main>
   );

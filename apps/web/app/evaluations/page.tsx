@@ -1,332 +1,554 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowRight, ArrowUpRight, BookOpen, Boxes, ChevronDown, CircleHelp, FileCode2, GitBranch, Search, ShieldCheck, Sparkles, X } from "lucide-react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { FlaskConical, LoaderCircle, Play, Plus, Square, Trash2, X } from "lucide-react";
+import { AppLayout } from "@/app/components/AppLayout";
+import { PageHeader, EmptyState, Stat } from "@/components/ui/sections";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { listRepositories, type Repository } from "@/lib/repositories/client";
 
-type HelpTopic =
-  "Getting started" | "Repositories" | "Chat & answers" | "Account";
-type Article = { category: HelpTopic; question: string; answer: string };
-const topics = [
-  "All topics",
-  "Getting started",
-  "Repositories",
-  "Chat & answers",
-  "Account",
-] as const;
-const articles: Article[] = [
-  {
-    category: "Getting started",
-    question: "How do I get started with NexusRAG?",
-    answer:
-      "Open your workspace, connect a repository, and let indexing prepare its files for search. Once indexing finishes, start a chat scoped to that repository.",
-  },
-  {
-    category: "Repositories",
-    question: "How do I connect a repository?",
-    answer:
-      "From Workspace, choose Add repository and provide the repository source. NexusRAG will add it to your workspace and begin building its searchable code context.",
-  },
-  {
-    category: "Repositories",
-    question: "What does repository indexing do?",
-    answer:
-      "Indexing reads supported source files, splits them into searchable code chunks, and records file references so answers can point back to their source.",
-  },
-  {
-    category: "Repositories",
-    question: "Why might indexing fail?",
-    answer:
-      "The source may be unavailable, access may have changed, or a sync may have encountered an issue. Check the repository status and try re-indexing after confirming access.",
-  },
-  {
-    category: "Chat & answers",
-    question: "How do I chat with one specific repository?",
-    answer:
-      "Open Chat playground and choose a repository from the selector at the top or in the composer. The conversation stays associated with that repository.",
-  },
-  {
-    category: "Chat & answers",
-    question: "Where do answer citations come from?",
-    answer:
-      "Citations refer to files retrieved from the selected repository. Open a citation to inspect the source path and compare the answer with the underlying code.",
-  },
-  {
-    category: "Chat & answers",
-    question: "What is the trace inspector?",
-    answer:
-      "The trace inspector summarizes query understanding, retrieval, reranking, and answer generation, helping you see how a response was formed.",
-  },
-  {
-    category: "Account",
-    question: "Can I change the appearance?",
-    answer:
-      "Yes. Use the theme button in the top bar or choose Light or Dark in Settings. Your theme preference is saved on this device.",
-  },
-  {
-    category: "Account",
-    question: "Where can I change workspace preferences?",
-    answer:
-      "Open Settings from the sidebar to update workspace details, indexing defaults, appearance, and notification preferences.",
-  },
+/**
+ * Evaluation harness for retrieval quality.
+ *
+ * A run sends a fixed question set through the production /api/ask endpoint
+ * against one READY repository and measures latency, grounding and citation
+ * counts. Runs are stored in localStorage so history survives reloads.
+ */
+
+const DEFAULT_QUESTIONS = [
+  "Where is authentication implemented?",
+  "Trace what happens when POST /api/login is called.",
+  "What depends on UserService?",
+  "Where would I need to make changes to add OAuth authentication?",
+  "Explain how the payment processing pipeline works.",
+  "What are the most important modules in this repository?",
 ];
 
+const STORAGE_KEY = "nexus-eval-runs-v1";
+const QUESTIONS_KEY = "nexus-eval-questions-v1";
+const MAX_RUNS = 10;
+
+type EvalResult = {
+  question: string;
+  ok: boolean;
+  latencyMs: number | null;
+  grounded: boolean;
+  sources: number;
+  answerChars: number;
+  error: string | null;
+};
+
+type EvalSummary = {
+  total: number;
+  succeeded: number;
+  avgLatencyMs: number | null;
+  maxLatencyMs: number | null;
+  citationRate: number;
+  groundedRate: number;
+};
+
+type EvalRun = {
+  id: string;
+  at: number;
+  repoId: string;
+  repoName: string;
+  results: EvalResult[];
+  summary: EvalSummary;
+};
+
+function summarize(results: EvalResult[]): EvalSummary {
+  const ok = results.filter((r) => r.ok);
+  const latencies = ok.map((r) => r.latencyMs).filter((n): n is number => typeof n === "number");
+  const cited = ok.filter((r) => r.sources > 0).length;
+  const grounded = ok.filter((r) => r.grounded).length;
+  return {
+    total: results.length,
+    succeeded: ok.length,
+    avgLatencyMs:
+      latencies.length > 0
+        ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+        : null,
+    maxLatencyMs: latencies.length > 0 ? Math.max(...latencies) : null,
+    citationRate: ok.length > 0 ? cited / ok.length : 0,
+    groundedRate: ok.length > 0 ? grounded / ok.length : 0,
+  };
+}
+
+function loadQuestions(): string[] {
+  try {
+    const raw = localStorage.getItem(QUESTIONS_KEY);
+    if (!raw) return [...DEFAULT_QUESTIONS];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [...DEFAULT_QUESTIONS];
+    const cleaned = parsed.filter((q): q is string => typeof q === "string" && q.trim().length > 0);
+    return cleaned.length > 0 ? cleaned : [...DEFAULT_QUESTIONS];
+  } catch {
+    return [...DEFAULT_QUESTIONS];
+  }
+}
+
+function loadRuns(): EvalRun[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as EvalRun[];
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_RUNS) : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatLatency(ms: number | null): string {
+  if (ms === null) return "—";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
+
 export default function EvaluationsPage() {
-  const [query, setQuery] = useState("");
-  const [topic, setTopic] = useState<(typeof topics)[number]>("All topics");
-  const filteredArticles = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    return articles.filter((article) => {
-      const matchesTopic = topic === "All topics" || article.category === topic;
-      const matchesSearch =
-        !search ||
-        `${article.question} ${article.answer} ${article.category}`
-          .toLowerCase()
-          .includes(search);
-      return matchesTopic && matchesSearch;
-    });
-  }, [query, topic]);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [reposLoading, setReposLoading] = useState(true);
+  const [repoId, setRepoId] = useState("");
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0, current: "" });
+  const [runs, setRuns] = useState<EvalRun[]>(() =>
+    typeof window === "undefined" ? [] : loadRuns(),
+  );
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  // Relevance is the operator's call, not ours: a fixed set cannot know which
+  // questions fit a given repository, so the set is editable and persisted.
+  const [questions, setQuestions] = useState<string[]>(() =>
+    typeof window === "undefined" ? [...DEFAULT_QUESTIONS] : loadQuestions(),
+  );
+  const [draft, setDraft] = useState("");
+  const cancelRef = useRef(false);
+
+  const persistQuestions = useCallback((next: string[]) => {
+    setQuestions(next);
+    try {
+      localStorage.setItem(QUESTIONS_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable -- questions still hold for this session */
+    }
+  }, []);
+
+  const addQuestion = useCallback(() => {
+    const text = draft.trim();
+    if (!text || running) return;
+    persistQuestions([...questions, text]);
+    setDraft("");
+  }, [draft, running, questions, persistQuestions]);
+
+  const removeQuestion = useCallback(
+    (index: number) => {
+      if (running) return;
+      persistQuestions(questions.filter((_, i) => i !== index));
+    },
+    [running, questions, persistQuestions],
+  );
+
+  useEffect(() => {
+    let active = true;
+    listRepositories()
+      .then((rows) => {
+        if (!active) return;
+        const ready = rows.filter((r) => r.status === "READY");
+        setRepositories(ready);
+        setRepoId((current) => current || ready[0]?.id || "");
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setReposLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const persistRuns = useCallback((next: EvalRun[]) => {
+    setRuns(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next.slice(0, MAX_RUNS)));
+    } catch {
+      /* storage full or unavailable -- runs still show for this session */
+    }
+  }, []);
+
+  const runEvaluation = useCallback(async () => {
+    const repo = repositories.find((r) => r.id === repoId);
+    if (!repo || running || questions.length === 0) return;
+    cancelRef.current = false;
+    setRunning(true);
+    const results: EvalResult[] = [];
+    const repoName = `${repo.owner} / ${repo.name}`;
+    const set = [...questions];
+    for (let i = 0; i < set.length; i += 1) {
+      const question = set[i] ?? "";
+      setProgress({ done: i, total: set.length, current: question });
+      if (cancelRef.current) break;
+      const startedAt = performance.now();
+      try {
+        const response = await fetch("/api/ask", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ question, repositoryIds: [repo.id], limit: 10 }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          answer?: string;
+          grounded?: boolean;
+          sources?: unknown[];
+          message?: string;
+        };
+        if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`);
+        results.push({
+          question,
+          ok: true,
+          latencyMs: Math.round(performance.now() - startedAt),
+          grounded: payload.grounded === true,
+          sources: Array.isArray(payload.sources) ? payload.sources.length : 0,
+          answerChars: typeof payload.answer === "string" ? payload.answer.length : 0,
+          error: null,
+        });
+      } catch (error) {
+        results.push({
+          question,
+          ok: false,
+          latencyMs: null,
+          grounded: false,
+          sources: 0,
+          answerChars: 0,
+          error: error instanceof Error ? error.message : "Request failed",
+        });
+      }
+      if (cancelRef.current) break;
+    }
+    const run: EvalRun = {
+      id: `${Date.now()}`,
+      at: Date.now(),
+      repoId: repo.id,
+      repoName,
+      results,
+      summary: summarize(results),
+    };
+    persistRuns([run, ...runs].slice(0, MAX_RUNS));
+    setActiveRunId(run.id);
+    setProgress({ done: results.length, total: set.length, current: "" });
+    setRunning(false);
+  }, [repositories, repoId, running, runs, persistRuns, questions]);
+
+  const deleteRun = useCallback(
+    (id: string) => {
+      const next = runs.filter((r) => r.id !== id);
+      persistRuns(next);
+      setActiveRunId((current) => (current === id ? (next[0]?.id ?? null) : current));
+    },
+    [runs, persistRuns],
+  );
+
+  const activeRun = runs.find((r) => r.id === (activeRunId ?? runs[0]?.id)) ?? runs[0] ?? null;
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
 
   return (
-    <div className="eval-page">
-      <div className="eval-heading">
-        <div className="eval-overline">
-          <span />
-          EVALUATIONS
-        </div>
-        <h1>Evaluation <span>runs</span></h1>
-        <p>Track quality, latency, and regressions across experiments.</p>
-      </div>
-      <div className="experiment-panel">
-        <div className="experiment-icon">
-          <Sparkles size={18} />
-        </div>
-        <div className="experiment-copy">
-          <div className="eval-label">CURRENT EXPERIMENT</div>
-          <strong>Hybrid retrieval v2.1</strong>
-          <span>Comparing RRF fusion vs. cross-encoder reranking on agent-runtime</span>
-        </div>
-        <div className="experiment-controls">
-          <label>
-            <span>DATASET</span>
-            <div className="select-wrap">
-              <select>
-                <option value="agent-runtime">agent-runtime · 248 questions</option>
-                <option value="rag-pipeline">rag-pipeline · 156 questions</option>
-              </select>
+    <AppLayout>
+      <div className="w-full px-5 pt-8 pb-14 sm:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.21, 0.65, 0.25, 1] }}
+        >
+          <PageHeader
+            eyebrow="Evaluations"
+            title={
+              <>
+                Evaluation runs<span className="text-[var(--nx-faint)]">.</span>
+              </>
+            }
+            lede="A fixed question set, answered live against your indexed code."
+            actions={
+              running ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    cancelRef.current = true;
+                  }}
+                >
+                  <Square size={14} /> Cancel run
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => void runEvaluation()}
+                  disabled={repositories.length === 0 || questions.length === 0}
+                >
+                  <Play size={14} /> Run evaluation
+                </Button>
+              )
+            }
+          />
+
+          {reposLoading ? (
+            <EmptyState
+              icon={<LoaderCircle size={22} className="animate-spin" />}
+              title="Loading repositories"
+              body="Reading your indexed repositories to build the evaluation target list."
+            />
+          ) : repositories.length === 0 ? (
+            <EmptyState
+              icon={<FlaskConical size={22} />}
+              title="Nothing to evaluate yet"
+              body="Evaluations run live questions against a READY repository. Index one first, then come back and press Run."
+              action={<Button href="/sync">Open Sync</Button>}
+            />
+          ) : (
+            <div className="grid gap-4">
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
+                <div className="flex min-w-0 flex-1 items-center gap-3 text-[13px] text-[var(--nx-muted)] sm:flex-none">
+                  Target repository
+                  <Select
+                    ariaLabel="Target repository"
+                    value={repoId}
+                    onChange={setRepoId}
+                    disabled={running}
+                    options={repositories.map((r) => ({
+                      value: r.id,
+                      label: `${r.owner} / ${r.name}`,
+                    }))}
+                    variant="inset"
+                    size="sm"
+                    className="min-w-0 flex-1 sm:w-64 sm:flex-none"
+                  />
+                </div>
+                <p className="w-full font-mono text-[10.5px] tracking-[0.08em] text-[var(--nx-faint)] sm:ml-auto sm:w-auto">
+                  {questions.length} LIVE QUESTIONS · SEQUENTIAL · MEASURED END-TO-END
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-mono text-[10px] tracking-[0.18em] text-[var(--nx-faint)] uppercase">
+                    Question set · yours to edit
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (!running) persistQuestions([...DEFAULT_QUESTIONS]);
+                    }}
+                    disabled={running}
+                    className="font-mono text-[10px] tracking-[0.1em] text-[var(--nx-muted)] uppercase hover:text-[var(--nx-mint)] disabled:opacity-50"
+                  >
+                    Reset defaults
+                  </button>
+                </div>
+                <ul className="mt-3 grid gap-2">
+                  {questions.map((q, i) => (
+                    <li
+                      key={`${i}-${q.slice(0, 24)}`}
+                      className="flex items-center gap-2.5 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-inset)] px-3 py-2 text-[12.5px] text-[var(--nx-ink)]"
+                    >
+                      <span className="font-mono text-[10px] tabular-nums text-[var(--nx-faint)]">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{q}</span>
+                      <button
+                        onClick={() => removeQuestion(i)}
+                        disabled={running}
+                        aria-label={`Remove question ${i + 1}`}
+                        className="grid size-6 shrink-0 place-items-center rounded-lg text-[var(--nx-faint)] hover:bg-[var(--nx-raised)] hover:text-[var(--nx-bad)] disabled:opacity-50"
+                      >
+                        <X size={13} />
+                      </button>
+                    </li>
+                  ))}
+                  {questions.length === 0 && (
+                    <li className="rounded-xl border border-dashed border-[var(--nx-border-strong)] px-3 py-4 text-center text-[12px] text-[var(--nx-faint)]">
+                      No questions — add at least one below to run an evaluation.
+                    </li>
+                  )}
+                </ul>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addQuestion();
+                      }
+                    }}
+                    disabled={running}
+                    placeholder="Add a question about this repository…"
+                    aria-label="Add a custom evaluation question"
+                    className="h-9 min-w-0 flex-1 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-inset)] px-3 text-[13px] text-[var(--nx-ink)] outline-none placeholder:text-[var(--nx-faint)] disabled:opacity-60"
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={addQuestion}
+                    disabled={running || !draft.trim()}
+                  >
+                    <Plus size={14} /> Add
+                  </Button>
+                </div>
+              </div>
+
+              {running && (
+                <div className="rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
+                  <div className="flex items-center justify-between font-mono text-[10.5px] tracking-[0.1em] text-[var(--nx-muted)] uppercase">
+                    <span className="flex items-center gap-2">
+                      <LoaderCircle size={13} className="animate-spin text-[var(--nx-mint)]" />
+                      Asking live questions
+                    </span>
+                    <span className="tabular-nums">
+                      {progress.done} / {progress.total}
+                    </span>
+                  </div>
+                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[var(--nx-track)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--nx-mint)] transition-[width] duration-500"
+                      style={{
+                        width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  {progress.current && (
+                    <p className="mt-2 truncate text-[12px] text-[var(--nx-faint)]">
+                      {progress.current}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {activeRun && (
+                <>
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <Stat
+                      label="Success rate"
+                      value={pct(
+                        activeRun.summary.succeeded / Math.max(1, activeRun.summary.total),
+                      )}
+                      sub={`${activeRun.summary.succeeded} of ${activeRun.summary.total} answered`}
+                    />
+                    <Stat
+                      label="Avg latency"
+                      value={formatLatency(activeRun.summary.avgLatencyMs)}
+                      sub={
+                        activeRun.summary.maxLatencyMs !== null
+                          ? `max ${formatLatency(activeRun.summary.maxLatencyMs)}`
+                          : "no successful answers"
+                      }
+                    />
+                    <Stat
+                      label="Citation rate"
+                      value={pct(activeRun.summary.citationRate)}
+                      sub="answers with at least one source"
+                    />
+                    <Stat
+                      label="Grounded rate"
+                      value={pct(activeRun.summary.groundedRate)}
+                      sub="answers flagged grounded by the pipeline"
+                    />
+                  </div>
+
+                  <div className="overflow-hidden rounded-2xl border border-[var(--nx-border)]">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[720px] border-collapse text-left">
+                        <thead>
+                          <tr className="border-b border-[var(--nx-border)] bg-[var(--nx-inset)] font-mono text-[10px] tracking-[0.14em] text-[var(--nx-faint)] uppercase">
+                            <th className="px-4 py-3 font-medium">Question</th>
+                            <th className="px-4 py-3 font-medium">Latency</th>
+                            <th className="px-4 py-3 font-medium">Sources</th>
+                            <th className="px-4 py-3 font-medium">Grounded</th>
+                            <th className="px-4 py-3 font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeRun.results.map((r) => (
+                            <tr
+                              key={r.question}
+                              className="border-b border-[var(--nx-border)] text-[12.5px] last:border-0 hover:bg-[var(--nx-raised)]"
+                            >
+                              <td className="max-w-[380px] px-4 py-3 text-[var(--nx-ink)]">
+                                {r.question}
+                              </td>
+                              <td className="px-4 py-3 font-mono tabular-nums text-[var(--nx-muted)]">
+                                {formatLatency(r.latencyMs)}
+                              </td>
+                              <td className="px-4 py-3 font-mono tabular-nums text-[var(--nx-muted)]">
+                                {r.ok ? r.sources : "—"}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={
+                                    r.grounded ? "text-[var(--nx-mint)]" : "text-[var(--nx-faint)]"
+                                  }
+                                >
+                                  {r.ok ? (r.grounded ? "yes" : "no") : "—"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {r.ok ? (
+                                  <span className="text-[var(--nx-mint)]">answered</span>
+                                ) : (
+                                  <span
+                                    className="text-[var(--nx-bad)]"
+                                    title={r.error ?? undefined}
+                                  >
+                                    failed
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <p className="font-mono text-[10.5px] tracking-[0.08em] text-[var(--nx-faint)]">
+                    RUN {new Date(activeRun.at).toLocaleString()} ·{" "}
+                    {activeRun.repoName.toUpperCase()} · {activeRun.results.length} QUESTIONS
+                  </p>
+                </>
+              )}
+
+              {runs.length > 1 && (
+                <div className="rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-4">
+                  <p className="font-mono text-[10px] tracking-[0.18em] text-[var(--nx-faint)] uppercase">
+                    Run history
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {runs.map((r) => (
+                      <div
+                        key={r.id}
+                        className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-[12.5px] ${
+                          r.id === activeRun?.id
+                            ? "border-[var(--nx-border-strong)] bg-[var(--nx-raised)]"
+                            : "border-[var(--nx-border)]"
+                        }`}
+                      >
+                        <button
+                          onClick={() => setActiveRunId(r.id)}
+                          className="min-w-0 flex-1 truncate text-left text-[var(--nx-ink)] hover:text-[var(--nx-mint)]"
+                        >
+                          {new Date(r.at).toLocaleString()} · {r.repoName} · {r.summary.succeeded}/
+                          {r.summary.total} answered
+                          {r.summary.avgLatencyMs !== null
+                            ? ` · avg ${formatLatency(r.summary.avgLatencyMs)}`
+                            : ""}
+                        </button>
+                        <button
+                          onClick={() => deleteRun(r.id)}
+                          aria-label="Delete this run"
+                          className="grid size-7 shrink-0 place-items-center rounded-lg text-[var(--nx-faint)] hover:bg-[var(--nx-raised)] hover:text-[var(--nx-bad)]"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </label>
-          <label>
-            <span>METRIC</span>
-            <div className="select-wrap">
-              <select>
-                <option value="answer-relevance">Answer relevance</option>
-                <option value="citation-precision">Citation precision</option>
-              </select>
-            </div>
-          </label>
-          <button className="eval-run-button">
-            <span className="eval-spin" /> Run evaluation
-          </button>
-        </div>
+          )}
+        </motion.div>
       </div>
-      <div className="eval-run-meta">
-        <span>
-          <span className="run-status-dot" />
-          <b>Last run</b> 2 hours ago
-        </span>
-        <span className="run-divider" />
-        <span>
-          <b>Status</b> Completed
-        </span>
-      </div>
-      <div className="eval-summary-grid">
-        <div className="eval-score-card">
-          <div className="eval-card-top">
-            <span>ANSWER RELEVANCE</span>
-            <span>
-              <svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2L12 6H4L8 2Z" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </span>
-          </div>
-          <div className="eval-score-value">0.87<small>/1.00</small></div>
-          <div className="eval-score-bottom">
-            <span className="score-track"><i style={{width: "87%"}} /></span>
-            <span>+0.03 vs baseline</span>
-          </div>
-        </div>
-        <div className="eval-score-card">
-          <div className="eval-card-top">
-            <span>CITATION PRECISION</span>
-            <span>
-              <svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2L12 6H4L8 2Z" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </span>
-          </div>
-          <div className="eval-score-value">0.72<small>/1.00</small></div>
-          <div className="eval-score-bottom">
-            <span className="score-track"><i style={{background: "#bd7557", width: "72%"}} /></span>
-            <span>-0.01 vs baseline</span>
-          </div>
-        </div>
-        <div className="eval-score-card">
-          <div className="eval-card-top">
-            <span>P95 LATENCY</span>
-            <span>
-              <svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2L12 6H4L8 2Z" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </span>
-          </div>
-          <div className="eval-score-value">1.8<small>s</small></div>
-          <div className="latency-detail">
-            <b>1.4s</b> retrieval · <b>0.4s</b> generation
-          </div>
-        </div>
-        <div className="eval-score-card">
-          <div className="eval-card-top">
-            <span>TOKEN COST</span>
-            <span>
-              <svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2L12 6H4L8 2Z" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </span>
-          </div>
-          <div className="eval-score-value">$0.002<small>/q</small></div>
-          <div className="neutral-change">No significant change</div>
-        </div>
-      </div>
-      <div className="eval-chart-panel">
-        <div className="eval-chart-heading">
-          <h2>Answer relevance trend</h2>
-          <div className="chart-period">Last 30 days <ChevronDown size={12} /></div>
-        </div>
-        <div className="chart-legend">
-          <span><i className="legend-sage" /> Baseline</span>
-          <span><i className="legend-coral" /> Current run</span>
-          <span><i className="legend-gold" /> Target</span>
-        </div>
-        <div className="chart-area">
-          <div className="chart-axis">
-            <span>1.0</span>
-            <span>0.8</span>
-            <span>0.6</span>
-            <span>0.4</span>
-          </div>
-          <div className="chart-lines">
-            <i className="chart-grid-line line-one" />
-            <i className="chart-grid-line line-two" />
-            <i className="chart-grid-line line-three" />
-            <i className="chart-grid-line line-four" />
-            <svg viewBox="0 0 600 130" preserveAspectRatio="none">
-              <path className="chart-path path-sage" d="M0 100 C60 95 120 70 180 78 S300 95 360 68 S480 50 540 38 S580 42 600 30" />
-              <path className="chart-path path-coral" d="M0 85 C60 80 120 55 180 62 S300 78 360 52 S480 35 540 24 S580 28 600 18" />
-              <path className="chart-path path-gold" d="M0 40 C60 40 120 40 180 40 S300 40 360 40 S480 40 540 40 S580 40 600 40" strokeDasharray="6 4" />
-            </svg>
-            <div className="chart-x-labels">
-              <span>Apr 28</span>
-              <span>May 5</span>
-              <span>May 12</span>
-              <span>May 19</span>
-              <span>May 26</span>
-            </div>
-          </div>
-          <div className="quality-breakdown">
-            <div className="eval-label">QUALITY BREAKDOWN</div>
-            <div className="quality-metric">
-              <div><b>Hallucination rate</b><span>2.1%</span></div>
-              <div className="quality-track"><i className="bar-sage" style={{width: "15%"}} /></div>
-              <small><span>Baseline: 3.4%</span></small>
-            </div>
-            <div className="quality-metric">
-              <div><b>Missing citations</b><span>8.7%</span></div>
-              <div className="quality-track"><i className="bar-coral" style={{width: "22%"}} /></div>
-              <small><span>Baseline: 11.2%</span></small>
-            </div>
-            <div className="quality-metric">
-              <div><b>Incorrect file refs</b><span>4.3%</span></div>
-              <div className="quality-track"><i className="bar-gold" style={{width: "11%"}} /></div>
-              <small><span>Baseline: 5.8%</span></small>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="eval-results-section">
-        <div className="eval-results-heading">
-          <h2>Question-level results <span>(248 questions)</span></h2>
-          <div className="table-filter">
-            <Search size={12} />
-            <input placeholder="Filter questions" />
-          </div>
-        </div>
-        <div className="eval-table-wrap">
-          <table className="eval-table">
-            <thead>
-              <tr>
-                <th>QUESTION</th>
-                <th>RELEVANCE</th>
-                <th>CITATION</th>
-                <th>LATENCY</th>
-                <th>TRACE</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <span className="question-index">01</span>
-                  <span className="answer-cell">How does hybrid search combine vector and keyword results?</span>
-                </td>
-                <td><span className="metric-pill good">0.94</span></td>
-                <td><span className="metric-pill good">0.89</span></td>
-                <td className="latency-cell">1.2s</td>
-                <td><a className="trace-link-button" href="#">View trace</a></td>
-              </tr>
-              <tr>
-                <td>
-                  <span className="question-index">02</span>
-                  <span className="answer-cell">Where is authentication handled in the API layer?</span>
-                </td>
-                <td><span className="metric-pill good">0.91</span></td>
-                <td><span className="metric-pill watch">0.67</span></td>
-                <td className="latency-cell">0.9s</td>
-                <td><a className="trace-link-button" href="#">View trace</a></td>
-              </tr>
-              <tr>
-                <td>
-                  <span className="question-index">03</span>
-                  <span className="answer-cell">Explain the indexing pipeline for Python repositories.</span>
-                </td>
-                <td><span className="metric-pill good">0.88</span></td>
-                <td><span className="metric-pill good">0.82</span></td>
-                <td className="latency-cell">1.5s</td>
-                <td><a className="trace-link-button" href="#">View trace</a></td>
-              </tr>
-              <tr>
-                <td>
-                  <span className="question-index">04</span>
-                  <span className="answer-cell">What triggers a re-index of a repository?</span>
-                </td>
-                <td><span className="metric-pill watch">0.72</span></td>
-                <td><span className="metric-pill watch">0.55</span></td>
-                <td className="latency-cell">2.1s</td>
-                <td><a className="trace-link-button" href="#">View trace</a></td>
-              </tr>
-              <tr>
-                <td>
-                  <span className="question-index">05</span>
-                  <span className="answer-cell">How are code chunks sized for embedding?</span>
-                </td>
-                <td><span className="metric-pill good">0.95</span></td>
-                <td><span className="metric-pill good">0.93</span></td>
-                <td className="latency-cell">0.8s</td>
-                <td><a className="trace-link-button" href="#">View trace</a></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="eval-table-footer">
-          <span>Showing 5 of 248 questions</span>
-          <button>Load more <ArrowRight size={12} /></button>
-        </div>
-      </div>
-      <div className="eval-footnote">
-        <svg viewBox="0 0 16 16" fill="none" width="12" height="12"><circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/><path d="M8 4v6M8 12v.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-        Demo data — connect your evaluation harness to track real runs.
-      </div>
-    </div>
+    </AppLayout>
   );
 }

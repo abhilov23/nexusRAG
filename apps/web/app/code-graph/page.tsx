@@ -1,99 +1,396 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Boxes, ChevronDown, Code2, FileCode2, GitBranch, Layers3, Search, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Boxes, Code2, FileCode2, GitBranch, Layers3, Search, Sparkles } from "lucide-react";
+import { AppLayout } from "@/app/components/AppLayout";
+import { Select } from "@/components/ui/select";
+import { listRepositories, type Repository } from "@/lib/repositories/client";
+import { fetchGraph, type GraphEdge, type GraphNode } from "@/lib/repositories/graph";
 
-const repositories = ["agent-runtime", "rag-pipeline", "docs-platform", "eval-harness", "web-console", "vector-store"];
-
-type GraphNode = {
-  id: string;
-  label: string;
-  kind: "repository" | "file" | "function" | "service";
-  x: number;
-  y: number;
-  description: string;
-};
-
-const nodes: GraphNode[] = [
-  { id: "repo", label: "agent-runtime", kind: "repository", x: 50, y: 11, description: "Repository root and default branch entry point." },
-  { id: "chat", label: "src/api/chat.ts", kind: "file", x: 12, y: 34, description: "HTTP routes and request validation for repository chat." },
-  { id: "hybrid", label: "src/retrieval/hybrid.py", kind: "file", x: 50, y: 34, description: "Combines vector and keyword retrieval before reranking." },
-  { id: "worker", label: "src/indexing/worker.py", kind: "file", x: 88, y: 34, description: "Consumes queued repository indexing jobs." },
-  { id: "ask", label: "ChatService.ask", kind: "function", x: 12, y: 62, description: "Builds the retrieval request and streams a cited response." },
-  { id: "retrieve", label: "HybridRetriever.retrieve", kind: "function", x: 34, y: 62, description: "Runs vector and BM25 retrieval for the active repository." },
-  { id: "fusion", label: "reciprocal_rank_fusion", kind: "function", x: 66, y: 62, description: "Merges ranked result lists using reciprocal rank weights." },
-  { id: "run", label: "IndexWorker.run", kind: "function", x: 88, y: 62, description: "Coordinates parsing, chunking, embedding, and index writes." },
-  { id: "qdrant", label: "QdrantStore.search", kind: "service", x: 28, y: 86, description: "Returns semantically similar chunks from the vector index." },
-  { id: "bm25", label: "BM25Index.query", kind: "service", x: 72, y: 86, description: "Returns lexical matches from the keyword index." },
-];
-const edges: [string, string][] = [["repo", "chat"], ["repo", "hybrid"], ["repo", "worker"], ["chat", "ask"], ["hybrid", "retrieve"], ["hybrid", "fusion"], ["worker", "run"], ["retrieve", "qdrant"], ["retrieve", "bm25"], ["fusion", "qdrant"], ["fusion", "bm25"]];
-
+/**
+ * Repository map, read from the symbol graph in Neo4j.
+ *
+ * Every node and edge comes from what was actually indexed: symbols, files and
+ * the relationships between them. The force layout is computed from that
+ * graph, so what is drawn reflects the real repository structure.
+ */
 export default function CodeGraphPage() {
-  const [repository, setRepository] = useState<string>(repositories[0] ?? "agent-runtime");
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [repositoryId, setRepositoryId] = useState<string>("");
+  const [nodes, setNodes] = useState<GraphNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState("hybrid");
+  const [selectedId, setSelectedId] = useState<string>("");
   const [showFiles, setShowFiles] = useState(true);
   const [showFunctions, setShowFunctions] = useState(true);
   const [showServices, setShowServices] = useState(true);
-  const graphNodes = useMemo(() => nodes.map((node) => node.id === "repo" ? { ...node, label: repository } : node), [repository]) as GraphNode[];
-  const branch = repository === "eval-harness" ? "develop" : "main";
-  const selected = graphNodes.find((node) => node.id === selectedId);
-  const selectedNode = selected ?? graphNodes[0]!;
-  const visibleNodes = useMemo(() => graphNodes.filter((node) =>
-    (showFiles || node.kind !== "file") &&
-    (showFunctions || node.kind !== "function") &&
-    (showServices || node.kind !== "service")
-  ), [graphNodes, showFiles, showFunctions, showServices]) as GraphNode[];
-  const visibleIds = new Set(visibleNodes.map((node) => node.id));
-  const matchingIds = new Set(visibleNodes.filter((node) => `${node.label} ${node.kind}`.toLowerCase().includes(query.trim().toLowerCase())).map((node) => node.id));
+
+  useEffect(() => {
+    let active = true;
+    void listRepositories()
+      .then((rows) => {
+        if (!active) return;
+        setRepositories(rows);
+        setRepositoryId(rows[0]?.id ?? "");
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Every setState below happens after an `await`, so nothing is set
+    // synchronously in the effect body.
+    (async () => {
+      if (!repositoryId) {
+        setNodes([]);
+        setEdges([]);
+        setAvailable(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const { nodes, edges, available } = await fetchGraph(repositoryId);
+        setNodes(nodes);
+        setEdges(edges);
+        setAvailable(available);
+        setSelectedId(nodes[0]?.key ?? "");
+      } catch {
+        setNodes([]);
+        setEdges([]);
+        setAvailable(false);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [repositoryId]);
+
+  // Lay the real graph out in concentric bands by kind, so relationships stay
+  // readable without inventing coordinates for symbols that do not exist.
+  const positioned = useMemo(() => {
+    const band = (kind: string) =>
+      kind === "FILE" ? 0 : kind === "CLASS" || kind === "INTERFACE" ? 1 : 2;
+    const grouped = new Map<number, GraphNode[]>();
+    for (const node of nodes) {
+      const key = band(node.kind);
+      grouped.set(key, [...(grouped.get(key) ?? []), node]);
+    }
+
+    return [...grouped.entries()].flatMap(([index, group]) => {
+      const ring = 16 + index * 26;
+      return group.map((node, i) => {
+        const angle = (i / Math.max(group.length, 1)) * Math.PI * 2;
+        return {
+          ...node,
+          x: 50 + Math.cos(angle) * ring,
+          y: 50 + Math.sin(angle) * ring,
+        };
+      });
+    });
+  }, [nodes]);
+
+  const repository = repositories.find((r) => r.id === repositoryId);
+  const branch = repository?.defaultBranch ?? "main";
+
+  const visibleNodes = useMemo(
+    () =>
+      positioned.filter(
+        (node) =>
+          (showFiles || node.kind !== "FILE") &&
+          (showFunctions || node.kind !== "CLASS") &&
+          (showServices || node.kind !== "FUNCTION"),
+      ),
+    [positioned, showFiles, showFunctions, showServices],
+  );
+  const visibleIds = new Set(visibleNodes.map((node) => node.key));
+  const matchingIds = new Set(
+    visibleNodes
+      .filter((node) =>
+        `${node.name} ${node.kind} ${node.path}`.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+      .map((node) => node.key),
+  );
+  const selectedNode = visibleNodes.find((node) => node.key === selectedId) ?? visibleNodes[0];
+
+  const empty = !loading && nodes.length === 0;
 
   return (
-    <div className="graph-page">
-      <div className="graph-page-heading">
-        <div><span className="graph-page-kicker"><span /> REPOSITORY MAP</span><h1>Code graph<span>.</span></h1><p>Explore how files, functions, and services connect across a repository.</p></div>
-        <label className="graph-repo-select"><GitBranch size={14} /><select aria-label="Repository graph" value={repository} onChange={(event) => setRepository(event.target.value)}>{repositories.map((repo) => <option value={repo} key={repo}>{repo}</option>)}</select><ChevronDown size={13} /></label>
+    <AppLayout>
+      <div className="w-full px-5 pt-8 pb-14 sm:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="min-w-0 max-w-[640px]">
+            <p className="font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
+              Repository map
+            </p>
+            <h1 className="font-display mt-2 text-[clamp(28px,3.4vw,40px)] leading-[1.04] font-semibold tracking-[-0.03em] text-[var(--nx-ink)]">
+              Code graph
+            </h1>
+            <p className="mt-2.5 max-w-[560px] text-[13.5px] leading-relaxed text-[var(--nx-muted)]">
+              Files, functions, and services laid out by kind — every position derived from the
+              indexed graph.
+            </p>
+          </div>
+          <Select
+            id="graph-repo"
+            name="graph-repo"
+            ariaLabel="Repository graph"
+            value={repositoryId}
+            onChange={setRepositoryId}
+            options={repositories.map((repo) => ({
+              value: repo.id,
+              label: `${repo.owner}/${repo.name}`,
+            }))}
+            placeholder="No repositories yet"
+            emptyLabel="No repositories yet"
+            icon={<GitBranch size={14} />}
+            className="max-w-[300px]"
+          />
+        </div>
+
+        <div className="mt-5 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="overflow-hidden rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)]">
+            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--nx-border)] p-2.5">
+              <label
+                className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl bg-[var(--nx-inset)] px-3 text-[var(--nx-muted)] sm:max-w-[260px]"
+                htmlFor="graph-node-search"
+              >
+                <Search size={14} className="shrink-0" />
+                <input
+                  id="graph-node-search"
+                  name="graph-node-search"
+                  aria-label="Search graph nodes"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search files and symbols"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--nx-ink)] outline-none placeholder:text-[var(--nx-faint)]"
+                />
+              </label>
+              <div
+                className="flex items-center gap-3 px-1 font-mono text-[10px] tracking-[0.14em] text-[var(--nx-faint)] uppercase"
+                role="group"
+                aria-label="Toggle symbol kinds"
+              >
+                {[
+                  { id: "graph-show-files", label: "Files", checked: showFiles, set: setShowFiles },
+                  {
+                    id: "graph-show-functions",
+                    label: "Classes",
+                    checked: showFunctions,
+                    set: setShowFunctions,
+                  },
+                  {
+                    id: "graph-show-services",
+                    label: "Functions",
+                    checked: showServices,
+                    set: setShowServices,
+                  },
+                ].map((t) => (
+                  <label
+                    key={t.id}
+                    htmlFor={t.id}
+                    className="flex cursor-pointer items-center gap-1.5 hover:text-[var(--nx-ink)]"
+                  >
+                    <input
+                      id={t.id}
+                      name={t.id}
+                      type="checkbox"
+                      checked={t.checked}
+                      onChange={(event) => t.set(event.target.checked)}
+                      className="accent-[var(--nx-ink)]"
+                    />
+                    {t.label}
+                  </label>
+                ))}
+              </div>
+              <span className="ml-auto font-mono text-[10px] tracking-[0.14em] text-[var(--nx-faint)]">
+                {nodes.length > 0 ? `${nodes.length} SYMBOLS` : "NO DATA"}
+              </span>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[var(--nx-border)] px-3 text-[12px] text-[var(--nx-muted)] hover:border-[var(--nx-border-strong)] hover:text-[var(--nx-ink)]"
+              >
+                <Sparkles size={13} /> Reload
+              </button>
+            </div>
+
+            <div
+              className="relative h-[520px] overflow-hidden"
+              aria-label={`Dependency graph for ${repository ? `${repository.owner}/${repository.name}` : "repository"}`}
+            >
+              {loading && (
+                <div className="absolute inset-0 grid place-items-center" role="status">
+                  <p className="font-mono text-[11px] tracking-[0.14em] text-[var(--nx-faint)] uppercase">
+                    Reading symbol graph…
+                  </p>
+                </div>
+              )}
+              {empty && (
+                <div className="absolute inset-0 grid place-items-center p-6 text-center">
+                  <div>
+                    <Boxes size={26} className="mx-auto text-[var(--nx-faint)]" />
+                    <h2 className="font-display mt-3 text-[18px] font-semibold tracking-tight text-[var(--nx-ink)]">
+                      No symbol graph yet
+                    </h2>
+                    <p className="mx-auto mt-1.5 max-w-[420px] text-[12.5px] leading-relaxed text-[var(--nx-muted)]">
+                      {repositories.length === 0
+                        ? "Connect a repository first — the graph is built once indexing completes."
+                        : available === false
+                          ? "The graph store is not reachable, so there is nothing to show. The repository has to finish indexing first."
+                          : "This repository has not been indexed yet, so no symbols or relationships exist to draw."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {nodes.length > 0 && (
+                <>
+                  <svg
+                    className="absolute inset-0 h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    {edges.map((edge) => {
+                      const source = positioned.find((n) => n.key === edge.from);
+                      const target = positioned.find((n) => n.key === edge.to);
+                      if (!source || !target) return null;
+                      if (!visibleIds.has(edge.from) || !visibleIds.has(edge.to)) return null;
+                      const lit = edge.from === selectedId || edge.to === selectedId;
+                      return (
+                        <line
+                          key={`${edge.from}-${edge.to}-${edge.type}`}
+                          x1={source.x}
+                          y1={source.y}
+                          x2={target.x}
+                          y2={target.y}
+                          stroke={lit ? "var(--nx-ink)" : "var(--nx-border-strong)"}
+                          strokeWidth={lit ? 0.5 : 0.25}
+                          vectorEffect="non-scaling-stroke"
+                          opacity={lit ? 1 : 0.7}
+                        />
+                      );
+                    })}
+                  </svg>
+                  {visibleNodes.map((node) => (
+                    <button
+                      key={node.key}
+                      type="button"
+                      onClick={() => setSelectedId(node.key)}
+                      aria-pressed={selectedNode?.key === node.key}
+                      title={`${node.name} · ${node.kind} · ${node.path}`}
+                      className={`absolute flex max-w-[220px] -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 truncate rounded-lg border px-2 py-1.5 font-mono text-[10.5px] transition-colors ${
+                        selectedNode?.key === node.key
+                          ? "border-[var(--nx-ink)] bg-[var(--nx-raised)] text-[var(--nx-ink)]"
+                          : matchingIds.has(node.key) && query.trim()
+                            ? "border-[var(--nx-border-strong)] bg-[var(--nx-surface)] text-[var(--nx-ink)]"
+                            : "border-[var(--nx-border)] bg-[var(--nx-surface)] text-[var(--nx-muted)] hover:border-[var(--nx-border-strong)] hover:text-[var(--nx-ink)]"
+                      }`}
+                      style={{ left: `${node.x}%`, top: `${node.y}%` }}
+                    >
+                      {node.kind === "FILE" ? (
+                        <FileCode2 size={12} className="shrink-0" />
+                      ) : node.kind === "CLASS" ? (
+                        <Layers3 size={12} className="shrink-0" />
+                      ) : (
+                        <Code2 size={12} className="shrink-0" />
+                      )}
+                      <span className="truncate">{node.name}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </section>
+
+          <aside className="rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-5 xl:sticky xl:top-[76px]">
+            {selectedNode ? (
+              <>
+                <p className="font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
+                  Symbol · {selectedNode.kind}
+                </p>
+                <h3 className="font-display mt-1.5 break-words text-[18px] font-semibold tracking-tight text-[var(--nx-ink)]">
+                  {selectedNode.name}
+                </h3>
+                <p className="mt-1 break-all font-mono text-[11px] leading-relaxed text-[var(--nx-faint)]">
+                  {selectedNode.path}
+                </p>
+                <dl className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--nx-border)] bg-[var(--nx-border)]">
+                  {[
+                    { label: "Kind", value: selectedNode.kind },
+                    { label: "Language", value: selectedNode.language || "—" },
+                    { label: "Branch", value: branch },
+                  ].map((row) => (
+                    <div key={row.label} className="bg-[var(--nx-surface)] px-3 py-2.5">
+                      <dt className="font-mono text-[9px] tracking-[0.16em] text-[var(--nx-faint)] uppercase">
+                        {row.label}
+                      </dt>
+                      <dd
+                        className="mt-1 truncate text-[12px] font-medium text-[var(--nx-ink)]"
+                        title={row.value}
+                      >
+                        {row.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-4 font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
+                  Relationships
+                </p>
+                <ul className="mt-2 grid gap-1.5">
+                  {edges
+                    .filter(
+                      (edge) => edge.from === selectedNode.key || edge.to === selectedNode.key,
+                    )
+                    .slice(0, 12)
+                    .map((edge) => {
+                      const other =
+                        positioned.find((n) => n.key === edge.from) ??
+                        positioned.find((n) => n.key === edge.to);
+                      const direction = edge.from === selectedNode.key ? "calls" : "called by";
+                      return (
+                        <li
+                          key={`${edge.from}-${edge.to}-${edge.type}`}
+                          className="rounded-lg border border-[var(--nx-border)] px-2.5 py-2 text-[11.5px] text-[var(--nx-muted)]"
+                        >
+                          <span className="mr-1.5 rounded border border-[var(--nx-border)] px-1 py-0.5 font-mono text-[9.5px] text-[var(--nx-faint)]">
+                            {edge.type}
+                          </span>
+                          <span className="text-[var(--nx-ink)]">{other?.name}</span>{" "}
+                          <em className="text-[var(--nx-faint)] not-italic">· {direction}</em>
+                        </li>
+                      );
+                    })}
+                  {edges.filter(
+                    (edge) => edge.from === selectedNode.key || edge.to === selectedNode.key,
+                  ).length === 0 && (
+                    <li className="text-[12px] text-[var(--nx-faint)]">
+                      No relationships recorded.
+                    </li>
+                  )}
+                </ul>
+              </>
+            ) : (
+              <>
+                <p className="font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
+                  Inspector
+                </p>
+                <p className="mt-2 text-[13px] leading-relaxed text-[var(--nx-muted)]">
+                  {loading
+                    ? "Reading the symbol graph…"
+                    : "Select a symbol to inspect its relationships."}
+                </p>
+              </>
+            )}
+          </aside>
+        </div>
       </div>
-      <div className="graph-workspace">
-        <section className="graph-explorer">
-          <div className="graph-toolbar">
-            <label><Search size={15} /><input aria-label="Search graph nodes" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search files and symbols" /></label>
-            <button onClick={() => { setQuery(""); setSelectedId("hybrid"); }}><Sparkles size={14} /> Reset view</button>
-          </div>
-          <div className="graph-filters">
-            <span>SHOW</span>
-            <label><input type="checkbox" checked={showFiles} onChange={(event) => setShowFiles(event.target.checked)} /> Files</label>
-            <label><input type="checkbox" checked={showFunctions} onChange={(event) => setShowFunctions(event.target.checked)} /> Functions</label>
-            <label><input type="checkbox" checked={showServices} onChange={(event) => setShowServices(event.target.checked)} /> Services</label>
-            <span className="graph-demo-label"><i /> DEMO SNAPSHOT</span>
-          </div>
-          <div className="graph-canvas" aria-label={`Dependency graph for ${repository}`}>
-            <svg className="graph-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              {edges.map(([from, to]) => {
-                const source = graphNodes.find((node) => node.id === from);
-                const target = graphNodes.find((node) => node.id === to);
-                if (!source || !target) return null;
-                const isVisible = visibleIds.has(from) && visibleIds.has(to);
-                return isVisible ? <line key={`${from}-${to}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y} className={from === selectedId || to === selectedId ? "is-connected" : ""} /> : null;
-              })}
-            </svg>
-            {visibleNodes.map((node) => {
-              const matches = !query || matchingIds.has(node.id);
-              const Icon = node.kind === "repository" ? Boxes : node.kind === "file" ? FileCode2 : node.kind === "function" ? Code2 : Layers3;
-              return <button key={node.id} className={`graph-node graph-node-${node.kind} ${selectedId === node.id ? "is-selected" : ""} ${matches ? "" : "is-dimmed"}`} style={{ left: `${node.x}%`, top: `${node.y}%` }} onClick={() => setSelectedId(node.id)} aria-pressed={selectedId === node.id}><Icon size={14} /><span>{node.label}</span></button>;
-            })}
-            {!matchingIds.size && query && <div className="graph-no-results">No matching files or symbols</div>}
-          </div>
-          <div className="graph-legend"><span><i className="legend-file" /> File</span><span><i className="legend-function" /> Function</span><span><i className="legend-service" /> Service</span><span>{visibleNodes.length} nodes · {edges.filter(([a, b]) => visibleIds.has(a) && visibleIds.has(b)).length} relationships</span></div>
-        </section>
-        <aside className="graph-inspector">
-          <div className="graph-inspector-heading"><div><span>SELECTED NODE</span><strong>{selectedNode.kind}</strong></div><Code2 size={17} /></div>
-          <h2>{selectedNode.label}</h2>
-          <p>{selectedNode.description}</p>
-          <div className="graph-inspector-stats"><div><span>REPOSITORY</span><strong>{repository}</strong></div><div><span>BRANCH</span><strong>{branch}</strong></div><div><span>RELATIONSHIPS</span><strong>{edges.filter(([from, to]) => from === selectedId || to === selectedId).length}</strong></div></div>
-          <div className="graph-related"><span>CONNECTED NODES</span>{edges.filter(([from, to]) => from === selectedId || to === selectedId).map(([from, to]) => { const other = graphNodes.find((node) => node.id === (from === selectedId ? to : from))!; return <button key={other.id} onClick={() => setSelectedId(other.id)}><span><i className={`related-dot dot-${other.kind}`} />{other.label}</span><ChevronDown size={13} /></button>; })}</div>
-          <div className="graph-snapshot-note">Relationships are shown from a static demo snapshot.</div>
-        </aside>
-      </div>
-    </div>
+    </AppLayout>
   );
 }

@@ -1,11 +1,56 @@
 {
-  "$schema": "https://turborepo.dev/schema.json",
+  "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "concurrency": "20",
+  "globalEnv": [
+    "AI_SERVICE_URL",
+    "APP_URL",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "DATABASE_URL",
+    "ELASTICSEARCH_API_KEY",
+    "ELASTICSEARCH_INDEX",
+    "ELASTICSEARCH_PASSWORD",
+    "ELASTICSEARCH_REJECT_UNAUTHORIZED",
+    "ELASTICSEARCH_URL",
+    "ELASTICSEARCH_USERNAME",
+    "EMAIL_FROM",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_BASE_URL",
+    "EMBEDDING_BATCH_SIZE",
+    "EMBEDDING_DIMENSIONS",
+    "EMBEDDING_MODEL",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
+    "GITHUB_TOKEN",
+    "INTERNAL_API_KEY",
+    "LLM_API_KEY",
+    "LLM_BASE_URL",
+    "LLM_MODEL",
+    "NEO4J_ENCRYPTED",
+    "NEO4J_PASSWORD",
+    "NEO4J_URI",
+    "NEO4J_USERNAME",
+    "NEXT_RUNTIME",
+    "NODE_ENV",
+    "OPENAI_API_KEY",
+    "QDRANT_URL",
+    "R2_ACCESS_KEY_ID",
+    "R2_BUCKET_NAME",
+    "R2_SECRET_ACCESS_KEY",
+    "REDIS_URL",
+    "RESEND_API_KEY",
+    "S3_ACCESS_KEY",
+    "S3_BUCKET",
+    "S3_ENDPOINT",
+    "S3_FORCE_PATH_STYLE",
+    "S3_REGION",
+    "S3_SECRET_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -13,9 +58,14 @@
     "check-types": {
       "dependsOn": ["^check-types"]
     },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "dependsOn": ["^build"]
     }
   }
 }

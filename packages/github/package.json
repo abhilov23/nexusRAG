@@ -1,0 +1,25 @@
+{
+  "name": "@repo/github",
+  "version": "1.0.0",
+  "description": "GitHub URL parsing, repository metadata and archive URL construction",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "tsc && node test/url-validation.mjs"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "eslint": "9.39.5",
+    "typescript": "7.0.2"
+  }
+}

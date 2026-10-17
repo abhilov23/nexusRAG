@@ -1,0 +1,307 @@
+@layer base {
+  :root {
+    /* Dark theme (default) — monochrome zinc, pure black base */
+    --app-bg: #000000;
+    --app-sidebar-bg: #000000;
+    --app-sidebar-border: #1c1c21;
+    --app-text: #fafafa;
+    --app-text-muted: #a1a1aa;
+    --app-text-subtle: #63636b;
+    --app-card-bg: #101014;
+    --app-card-border: #1f1f25;
+    --app-card-hover: #1a1a20;
+    --app-active-bg: #1a1a20;
+    --app-active-border: #fafafa;
+    --app-input-bg: #101014;
+    --app-input-border: #26262c;
+    --app-input-focus: #fafafa;
+    --app-topbar-bg: rgba(9, 9, 11, 0.9);
+    --app-topbar-border: #1c1c21;
+    --app-dropdown-bg: #101014;
+    --app-dropdown-border: #26262c;
+    --app-dropdown-hover: #1a1a20;
+    --app-avatar-bg: #232329;
+    --app-avatar-color: #fafafa;
+    --app-avatar-border: #2e2e36;
+    --app-green: #fafafa;
+    --app-green-dim: #a1a1aa;
+    --app-green-bright: #fafafa;
+    --app-brand-gradient: #fafafa;
+    --app-usage-track: #232329;
+    --app-usage-fill: #fafafa;
+    --app-modal-backdrop: rgba(0, 0, 0, 0.72);
+    --app-search-bg: #101014;
+    --app-search-border: #26262c;
+    --app-search-input-border: #1c1c21;
+    --app-code-bg: #0c0c0e;
+    --app-code-border: #1f1f25;
+    --app-trace-bg: #0c0c0e;
+    --app-trace-border: #1c1c21;
+    --app-trace-step-border: #1f1f25;
+    --app-trace-icon-border: #2e2e36;
+    --app-trace-icon-bg: #1a1a20;
+    --app-trace-icon-color: #fafafa;
+    --app-placeholder-glow: rgba(255, 255, 255, 0.06);
+    --app-placeholder-icon-bg: #1a1a20;
+    --app-placeholder-icon-border: #2e2e36;
+    --app-placeholder-icon-color: #fafafa;
+    --app-repo-card-bg: #101014;
+    --app-repo-card-border: #1f1f25;
+    --app-repo-card-hover: #2e2e36;
+    --app-repo-icon-border: color-mix(in srgb, var(--repo-color), transparent 77%);
+    --app-repo-icon-bg: color-mix(in srgb, var(--repo-color), transparent 91%);
+    --app-status-completed-bg: rgba(255, 255, 255, 0.07);
+    --app-status-completed-color: #fafafa;
+    --app-status-indexing-bg: rgba(255, 255, 255, 0.05);
+    --app-status-indexing-color: #a1a1aa;
+    --app-status-queued-bg: rgba(255, 255, 255, 0.04);
+    --app-status-queued-color: #a1a1aa;
+    --app-status-failed-bg: rgba(248, 113, 113, 0.1);
+    --app-status-failed-color: #f87171;
+    --app-progress-bg: #fafafa;
+    --app-modal-icon-bg: #1a1a20;
+    --app-modal-icon-border: #2e2e36;
+    --app-modal-icon-color: #fafafa;
+    --app-kicker-color: #a1a1aa;
+    --app-form-error: #f87171;
+    --app-note-color: #a1a1aa;
+    --app-lock-color: #a1a1aa;
+    --app-secondary-btn-bg: #1a1a20;
+    --app-secondary-btn-border: #26262c;
+    --app-secondary-btn-color: #d4d4d8;
+    --app-secondary-btn-hover: #232329;
+    --app-primary-btn-bg: #fafafa;
+    --app-primary-btn-color: #09090b;
+    --app-primary-btn-hover: #e4e4e7;
+    --app-delete-color: #f87171;
+    --app-online-dot: #fafafa;
+    --app-index-progress: #fafafa;
+    --app-failed-note: #f87171;
+    --app-chunk-caption: #a1a1aa;
+    --app-meta-divider: #2e2e36;
+    --app-breadcrumb-slash: #2e2e36;
+    --app-system-status: #a1a1aa;
+    --app-search-trigger-bg: #101014;
+    --app-search-trigger-border: #1f1f25;
+    --app-search-trigger-color: #a1a1aa;
+    --app-kbd-bg: #1a1a20;
+    --app-kbd-border: #26262c;
+    --app-kbd-color: #a1a1aa;
+    --app-help-size: 26px;
+    --app-avatar-size: 27px;
+    --app-primary-hover: #c74300;
+    --app-primary: #fafafa;
+    --app-primary-foreground: #09090b;
+    --app-destructive: #dc2626;
+    --app-destructive-foreground: #fff;
+    --app-ring: #a1a1aa;
+    --app-radius: 0.75rem;
+    /* Shared surface tokens (referenced across components) */
+    --app-border: #1c1c21;
+    --app-panel: #101014;
+    --app-panel-raised: #1a1a20;
+    --app-panel-hover: #232329;
+    --app-cyan: #a1a1aa;
+    --app-gold: #d4d4d8;
+    /* Sidebar is deep zinc in BOTH themes. */
+    --app-sidebar-text: #fafafa;
+    --app-sidebar-muted: #a1a1aa;
+    --app-sidebar-subtle: #63636b;
+    --app-sidebar-card-bg: #101014;
+    --app-sidebar-card-border: #1f1f25;
+    --app-sidebar-active-bg: #1a1a20;
+    --app-sidebar-accent: #fafafa;
+    --app-border-strong: #2e2e36;
+    --app-green-dark: #52525b;
+  }
+
+  /* Light theme */
+  .light,
+  [data-theme="light"] {
+    --app-bg: #fafafa;
+    --app-sidebar-bg: #09090b;
+    --app-sidebar-border: #1c1c21;
+    --app-text: #09090b;
+    --app-text-muted: #52525b;
+    --app-text-subtle: #a1a1aa;
+    --app-card-bg: #fff;
+    --app-card-border: #e2e2e8;
+    --app-card-hover: #f4f4f5;
+    --app-active-bg: #f4f4f5;
+    --app-active-border: #09090b;
+    --app-input-bg: #fff;
+    --app-input-border: #e2e2e8;
+    --app-input-focus: #09090b;
+    --app-topbar-bg: rgba(250, 250, 250, 0.9);
+    --app-topbar-border: #e2e2e8;
+    --app-dropdown-bg: #fff;
+    --app-dropdown-border: #e2e2e8;
+    --app-dropdown-hover: #f4f4f5;
+    --app-avatar-bg: #e4e4e7;
+    --app-avatar-color: #09090b;
+    --app-avatar-border: #d4d4d8;
+    --app-green: #09090b;
+    --app-green-dim: #52525b;
+    --app-green-bright: #09090b;
+    --app-brand-gradient: #09090b;
+    --app-usage-track: #e2e2e8;
+    --app-usage-fill: #09090b;
+    --app-modal-backdrop: rgba(9, 9, 11, 0.55);
+    --app-search-bg: #fff;
+    --app-search-border: #e2e2e8;
+    --app-search-input-border: #e2e2e8;
+    --app-code-bg: #f4f4f5;
+    --app-code-border: #e2e2e8;
+    --app-trace-bg: #fff;
+    --app-trace-border: #e2e2e8;
+    --app-trace-step-border: #e2e2e8;
+    --app-trace-icon-border: #d4d4d8;
+    --app-trace-icon-bg: #f4f4f5;
+    --app-trace-icon-color: #09090b;
+    --app-placeholder-glow: rgba(9, 9, 11, 0.06);
+    --app-placeholder-icon-bg: #09090b;
+    --app-placeholder-icon-border: #27272a;
+    --app-placeholder-icon-color: #fafafa;
+    --app-repo-card-bg: #fff;
+    --app-repo-card-border: #e2e2e8;
+    --app-repo-card-hover: #f4f4f5;
+    --app-repo-icon-border: color-mix(in srgb, var(--repo-color), transparent 77%);
+    --app-repo-icon-bg: color-mix(in srgb, var(--repo-color), transparent 91%);
+    --app-status-completed-bg: #f4f4f5;
+    --app-status-completed-color: #09090b;
+    --app-status-indexing-bg: #f4f4f5;
+    --app-status-indexing-color: #52525b;
+    --app-status-queued-bg: #f4f4f5;
+    --app-status-queued-color: #52525b;
+    --app-status-failed-bg: rgba(220, 38, 38, 0.07);
+    --app-status-failed-color: #dc2626;
+    --app-progress-bg: #09090b;
+    --app-modal-icon-bg: #f4f4f5;
+    --app-modal-icon-border: #d4d4d8;
+    --app-modal-icon-color: #09090b;
+    --app-kicker-color: #52525b;
+    --app-form-error: #dc2626;
+    --app-note-color: #52525b;
+    --app-lock-color: #52525b;
+    --app-secondary-btn-bg: #fff;
+    --app-secondary-btn-border: #e2e2e8;
+    --app-secondary-btn-color: #52525b;
+    --app-secondary-btn-hover: #f4f4f5;
+    --app-primary-btn-bg: #09090b;
+    --app-primary-btn-color: #ffffff;
+    --app-primary-btn-hover: #27272a;
+    --app-delete-color: #dc2626;
+    --app-online-dot: #09090b;
+    --app-index-progress: #09090b;
+    --app-failed-note: #dc2626;
+    --app-chunk-caption: #a1a1aa;
+    --app-meta-divider: #d4d4d8;
+    --app-breadcrumb-slash: #d4d4d8;
+    --app-system-status: #52525b;
+    --app-search-trigger-bg: #fff;
+    --app-search-trigger-border: #e2e2e8;
+    --app-search-trigger-color: #52525b;
+    --app-kbd-bg: #f4f4f5;
+    --app-kbd-border: #e2e2e8;
+    --app-kbd-color: #52525b;
+    --app-help-size: 26px;
+    --app-avatar-size: 27px;
+    --app-primary-hover: #27272a;
+    --app-primary: #09090b;
+    --app-primary-foreground: #ffffff;
+    --app-destructive: #dc2626;
+    --app-destructive-foreground: #fff;
+    --app-ring: #a1a1aa;
+    --app-radius: 0.75rem;
+    /* Shared surface tokens (referenced across components) */
+    --app-border: #e2e2e8;
+    --app-panel: #ffffff;
+    --app-panel-raised: #f4f4f5;
+    --app-panel-hover: #ececef;
+    --app-cyan: #52525b;
+    --app-gold: #a1a1aa;
+
+    --app-border-strong: #d4d4d8;
+    --app-green-dark: #52525b;
+    --app-sidebar-accent: #fafafa;
+  }
+
+  * {
+    border-color: var(--app-border);
+    box-sizing: border-box;
+  }
+  html {
+    min-width: 360px;
+    background: var(--app-bg);
+  }
+  body {
+    background: var(--app-bg);
+    color: var(--app-text);
+    margin: 0;
+    font-family: "DM Sans", sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+  button {
+    color: inherit;
+    cursor: pointer;
+  }
+  ::selection {
+    color: var(--app-primary-foreground);
+    background: var(--app-primary);
+  }
+  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
+    overflow-wrap: anywhere;
+  }
+  pre,
+  code {
+    overflow-x: auto;
+    white-space: pre;
+  }
+}
+
+/* Premium headline accents: champagne serif italic on the accent hooks
+   every app headline already carries (trailing periods, emphasized words). */
+.chat-home h1 > span:last-child,
+.graph-page-heading h1 > span,
+.graph-page h1 > span,
+.help-heading h1 > span,
+.settings-heading h1 .heading-period,
+.workspace-heading h1 .heading-period,
+.auth-story-content h1 em {
+  font-family: "Newsreader", Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--nx-mint);
+}
+
+/* Light auth surfaces need bronze instead of champagne for contrast. */
+.light-app .auth-story-content h1 em {
+  color: #b23a00;
+}
+
+/* Workspace hero texture: champagne glow + engineering grid that reads on
+   both themes. The grid lines are white-on-dark, bronze-on-light. */
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+.light-app .workspace-hero {
+  background: #fffdf8;
+  border-color: #e6e1d7;
+  box-shadow: 0 24px 60px -40px rgba(120, 95, 50, 0.35);
+}
+.light-app .hero-glow {
+  background: radial-gradient(55% 130% at 12% 0%, rgba(180, 145, 80, 0.16), transparent 62%);
+}
+.light-app .hero-grid {
+  background-image:
+    linear-gradient(rgba(90, 70, 35, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90, 70, 35, 0.08) 1px, transparent 1px);
+}

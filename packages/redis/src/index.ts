@@ -1,1 +1,6 @@
-export { redis } from "./client"
+export {
+  redis,
+  createRedisConnection,
+  redisConnectionOptions,
+  type RedisConnectionConfig,
+} from "./client.js";

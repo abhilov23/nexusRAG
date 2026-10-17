@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -11,11 +11,19 @@ import {
   Loader2,
   AlertCircle,
   Lock,
+  Moon,
+  Sun,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useTheme } from "@/app/context/ThemeContext";
+import { Logo } from "@/components/app/brand";
+
+const inputCls =
+  "flex h-11 items-center gap-2.5 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-surface)] px-3.5 text-[13.5px] text-[var(--nx-ink)] transition-colors focus-within:border-[var(--nx-ink)]";
 
 export default function ResetPasswordClient() {
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
@@ -26,13 +34,6 @@ export default function ResetPasswordClient() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [tokenValidated, setTokenValidated] = useState(false);
-
-  useEffect(() => {
-    if (!token) {
-      setError("Invalid or missing reset token. Please request a new reset link.");
-    }
-  }, [token]);
 
   const validatePassword = (pwd: string) => {
     if (pwd.length < 8) return "Password must be at least 8 characters";
@@ -66,11 +67,15 @@ export default function ResetPasswordClient() {
     setLoading(true);
 
     try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, newPassword: password }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Password reset failed");
       setNotice("Password has been reset successfully. Redirecting to login...");
@@ -85,201 +90,159 @@ export default function ResetPasswordClient() {
     }
   };
 
-  if (!token) {
-    return (
-      <main className={`auth-page nexus-app ${theme === "light" ? "light-app" : ""}`}>
-        <section className="auth-form-side">
-          <button
-            className="auth-theme-toggle"
-            onClick={() => {}}
-            aria-label="Theme toggle"
-          />
-          <div className="auth-form-wrap">
-            <Link className="auth-back" href="/">
-              <ArrowLeft size={14} />
-              Back to home
-            </Link>
-            <span className="auth-kicker">ACCOUNT RECOVERY</span>
-            <h2>Reset your password</h2>
-            <p className="auth-subtitle">
-              The reset link is invalid or has expired. Please request a new one.
-            </p>
-            <div className="auth-error" role="alert">
-              <span><AlertCircle size={15} /></span>
-              Invalid or missing reset token. Please request a new reset link.
-            </div>
-            <div className="auth-switch">
-              <Link href="/login?mode=forgot">Request a new reset link</Link>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
   return (
-    <main className={`auth-page nexus-app ${theme === "light" ? "light-app" : ""}`}>
-      <section className="auth-story">
-        <Link className="auth-brand" href="/">
-          <span className="brand-mark">
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>
-            nexus<span>rag</span>
-          </span>
-        </Link>
-        <div className="auth-story-content">
-          <span className="auth-overline">THE CONTEXT LAYER FOR YOUR CODE</span>
-          <h1>
-            Make your entire codebase <em>conversational.</em>
-          </h1>
-          <p>
-            One calm place to understand, search, and reason across every
-            repository your team builds.
-          </p>
-          <div className="auth-story-rule" />
-          <div className="auth-proof">
-            <Lock size={16} />
-            <span>Secure password reset. Your code stays yours.</span>
-          </div>
-        </div>
-        <div className="auth-story-footer">
-          <span>© 2025 NexusRAG</span>
-          <span>Built for curious teams.</span>
-        </div>
-        <div className="auth-graphic">
-          <div className="graphic-ring ring-a" />
-          <div className="graphic-ring ring-b" />
-          <div className="graphic-ring ring-c" />
-          <span className="graphic-node node-a" />
-          <span className="graphic-node node-b" />
-          <span className="graphic-node node-c" />
-        </div>
-      </section>
-      <section className="auth-form-side">
-        <button
-          className="auth-theme-toggle"
-          onClick={() => {}}
-          aria-label="Theme toggle"
-        />
-        <div className="auth-mobile-brand">
-          <Link className="auth-brand" href="/">
-            <span className="brand-mark">
-              <span />
-              <span />
-              <span />
-            </span>
-            <span>
-              nexus<span>rag</span>
-            </span>
+    <main className="grid min-h-screen place-items-center bg-[var(--nx-bg)] px-5 py-10 text-[var(--nx-ink)]">
+      <div className="w-full max-w-[400px]">
+        <div className="flex items-center justify-between">
+          <Link href="/" aria-label="NexusRAG home">
+            <Logo />
           </Link>
+          <button
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            className="grid size-9 place-items-center rounded-xl border border-[var(--nx-border)] text-[var(--nx-muted)] hover:border-[var(--nx-border-strong)] hover:text-[var(--nx-ink)]"
+          >
+            {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
         </div>
-        <div className="auth-form-wrap">
-          <Link className="auth-back" href="/">
+
+        <div className="mt-8 rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)] p-6 sm:p-7">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--nx-muted)] hover:text-[var(--nx-ink)]"
+          >
             <ArrowLeft size={14} />
             Back to home
           </Link>
-          <span className="auth-kicker">ACCOUNT RECOVERY</span>
-          <h2>Reset your password</h2>
-          <p className="auth-subtitle">
-            Enter your new password below. Make sure it's strong and unique.
+          <p className="mt-4 font-mono text-[10px] tracking-[0.22em] text-[var(--nx-faint)] uppercase">
+            Account recovery
           </p>
-          {error && (
-            <div className="auth-error" role="alert">
-              <span><AlertCircle size={15} /></span>
-              {error}
-            </div>
-          )}
-          {notice && !error && (
-            <div className="auth-success" role="status">
-              <span><Check size={15} /></span>
-              {notice}
-            </div>
-          )}
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label>
-              New password
-              <div className="auth-input">
-                <KeyRound size={15} />
-                <input
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters"
-                  minLength={8}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <KeyRound size={15} /> : <KeyRound size={15} />}
-                </button>
+          <h1 className="font-display mt-1.5 text-[24px] font-semibold tracking-tight">
+            Reset your password
+          </h1>
+
+          {!token ? (
+            <>
+              <p className="mt-2 text-[13px] leading-relaxed text-[var(--nx-muted)]">
+                The reset link is invalid or has expired. Please request a new one.
+              </p>
+              <div
+                className="mt-4 flex items-start gap-2.5 rounded-xl border border-[var(--nx-bad)] bg-[color-mix(in_srgb,var(--nx-bad)_8%,transparent)] px-3.5 py-3 text-[13px] text-[var(--nx-bad)]"
+                role="alert"
+              >
+                <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                Invalid or missing reset token. Please request a new reset link.
               </div>
-            </label>
-            <label>
-              Confirm new password
-              <div className="auth-input">
-                <KeyRound size={15} />
-                <input
-                  name="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="Confirm your new password"
-                  minLength={8}
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              <Link
+                href="/login?mode=forgot"
+                className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--nx-signal)] text-[13.5px] font-semibold text-[var(--nx-signal-ink)] transition-opacity hover:opacity-85"
+              >
+                Request a new reset link
+                <ArrowRight size={15} />
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-[13px] leading-relaxed text-[var(--nx-muted)]">
+                Enter your new password below. Make sure it&apos;s strong and unique.
+              </p>
+              {error && (
+                <div
+                  className="mt-4 flex items-start gap-2.5 rounded-xl border border-[var(--nx-bad)] bg-[color-mix(in_srgb,var(--nx-bad)_8%,transparent)] px-3.5 py-3 text-[13px] text-[var(--nx-bad)]"
+                  role="alert"
                 >
-                  {showConfirmPassword ? <KeyRound size={15} /> : <KeyRound size={15} />}
-                </button>
-              </div>
-            </label>
-            <button className="auth-submit" type="submit" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 size={15} className="spin" />
-                  Resetting...
-                </>
-              ) : (
-                <>
-                  Reset password
-                  <ArrowRight size={15} />
-                </>
+                  <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                  {error}
+                </div>
               )}
-            </button>
-          </form>
-          <div className="auth-switch">
-            Remembered your password?{" "}
-            <Link href="/login" onClick={(e) => { e.preventDefault(); router.push("/login"); }}>
-              Sign in
-            </Link>
-          </div>
-          <div className="auth-secure">
-            <Lock size={13} />
-            Your code stays yours. NexusRAG never trains on private
-            repositories.
-          </div>
+              {notice && !error && (
+                <div
+                  className="mt-4 flex items-start gap-2.5 rounded-xl border border-[var(--nx-border)] bg-[var(--nx-raised)] px-3.5 py-3 text-[13px] text-[var(--nx-ink)]"
+                  role="status"
+                >
+                  <Check size={15} className="mt-0.5 shrink-0" />
+                  {notice}
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="mt-4 grid gap-3">
+                {[
+                  {
+                    label: "New password",
+                    name: "password",
+                    value: password,
+                    set: setPassword,
+                    show: showPassword,
+                    setShow: setShowPassword,
+                  },
+                  {
+                    label: "Confirm new password",
+                    name: "confirmPassword",
+                    value: confirmPassword,
+                    set: setConfirmPassword,
+                    show: showConfirmPassword,
+                    setShow: setShowConfirmPassword,
+                  },
+                ].map((f) => (
+                  <label key={f.name} className="block text-[12.5px] font-semibold">
+                    {f.label}
+                    <div className={`${inputCls} mt-1.5`}>
+                      <KeyRound size={15} className="shrink-0 text-[var(--nx-faint)]" />
+                      <input
+                        name={f.name}
+                        type={f.show ? "text" : "password"}
+                        autoComplete="new-password"
+                        placeholder="At least 8 characters"
+                        minLength={8}
+                        required
+                        value={f.value}
+                        onChange={(e) => f.set(e.target.value)}
+                        disabled={loading}
+                        className="w-full bg-transparent outline-none placeholder:text-[var(--nx-faint)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => f.setShow(!f.show)}
+                        aria-label={f.show ? "Hide password" : "Show password"}
+                        className="shrink-0 text-[var(--nx-faint)] hover:text-[var(--nx-ink)]"
+                      >
+                        {f.show ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </label>
+                ))}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-1 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--nx-signal)] text-[13.5px] font-semibold text-[var(--nx-signal-ink)] transition-opacity hover:opacity-85 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      Resetting…
+                    </>
+                  ) : (
+                    <>
+                      Reset password
+                      <ArrowRight size={15} />
+                    </>
+                  )}
+                </button>
+              </form>
+              <p className="mt-4 text-center text-[13px] text-[var(--nx-muted)]">
+                Remembered your password?{" "}
+                <Link href="/login" className="font-semibold text-[var(--nx-ink)] hover:underline">
+                  Sign in
+                </Link>
+              </p>
+            </>
+          )}
         </div>
-        <footer className="auth-form-footer">
-          <span>© 2025 NexusRAG</span>
-          <a href="mailto:hello@nexusrag.dev">Need help?</a>
-        </footer>
-      </section>
+
+        <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-[11.5px] text-[var(--nx-faint)]">
+          <Lock size={12} />
+          Your code stays yours. NexusRAG never trains on private repositories.
+        </p>
+      </div>
     </main>
   );
 }

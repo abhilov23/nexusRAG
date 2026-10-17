@@ -1,0 +1,31 @@
+{
+  "name": "@repo/retrieval",
+  "version": "1.0.0",
+  "description": "Hybrid retrieval: vector + lexical search fused and reranked",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@repo/graph": "workspace:*",
+    "@repo/search": "workspace:*",
+    "js-tiktoken": "^1.0.15"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "eslint": "9.39.5",
+    "tsx": "^4.19.2",
+    "typescript": "7.0.2"
+  }
+}
