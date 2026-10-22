@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -35,6 +36,24 @@ class RetrievedChunk:
     content: str
     score: float = 0.0
     ranks: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class RetrievalOutcome:
+    """Chunks plus the counters and timings the trace view needs.
+
+    The counters are deliberately measured inside the retriever: reconstructing
+    them from the returned chunks would hide the hits that fusion dropped.
+    """
+
+    chunks: list[RetrievedChunk]
+    vector_hits: int = 0
+    lexical_hits: int = 0
+    fused: int = 0
+    deduped: int = 0
+    vector_ms: float = 0.0
+    lexical_ms: float = 0.0
+    fusion_ms: float = 0.0
 
 
 def reciprocal_rank_fusion(
@@ -163,7 +182,7 @@ def lexical_search(
     return scored[:limit]
 
 
-def hybrid_retrieve(
+def hybrid_retrieve_with_stats(
     *,
     settings: Settings,
     question: str,
@@ -172,9 +191,10 @@ def hybrid_retrieve(
     client: QdrantClient,
     chunks_by_repo: dict[str, list[dict[str, Any]]] | None = None,
     limit: int = 12,
-) -> list[RetrievedChunk]:
-    """Vector + lexical, fused, deduplicated, truncated."""
+) -> RetrievalOutcome:
+    """Vector + lexical, fused, deduplicated, truncated, with trace counters."""
     vector_hits: list[tuple[RetrievedChunk, float]] = []
+    vector_started = time.perf_counter()
     try:
         vector_hits = vector_search(
             client,
@@ -184,14 +204,18 @@ def hybrid_retrieve(
         )
     except Exception as error:  # noqa: BLE001 - degrade rather than fail the question
         logger.warning("vector search unavailable: %s", error)
+    vector_ms = (time.perf_counter() - vector_started) * 1000
 
     lexical_hits: list[tuple[RetrievedChunk, float]] = []
+    lexical_started = time.perf_counter()
     if chunks_by_repo:
         try:
             lexical_hits = lexical_search(chunks_by_repo, question, repository_ids)
         except Exception as error:  # noqa: BLE001
             logger.warning("lexical search unavailable: %s", error)
+    lexical_ms = (time.perf_counter() - lexical_started) * 1000
 
+    fusion_started = time.perf_counter()
     ranked_lists: dict[str, list[tuple[RetrievedChunk, float]]] = {"vector": vector_hits}
     if lexical_hits:
         ranked_lists["lexical"] = lexical_hits
@@ -207,5 +231,37 @@ def hybrid_retrieve(
             continue
         seen.add(key)
         deduped.append(chunk)
+    fusion_ms = (time.perf_counter() - fusion_started) * 1000
 
-    return deduped[:limit]
+    return RetrievalOutcome(
+        chunks=deduped[:limit],
+        vector_hits=len(vector_hits),
+        lexical_hits=len(lexical_hits),
+        fused=len(fused),
+        deduped=len(deduped),
+        vector_ms=round(vector_ms, 2),
+        lexical_ms=round(lexical_ms, 2),
+        fusion_ms=round(fusion_ms, 2),
+    )
+
+
+def hybrid_retrieve(
+    *,
+    settings: Settings,
+    question: str,
+    repository_ids: list[str],
+    embedding: list[float],
+    client: QdrantClient,
+    chunks_by_repo: dict[str, list[dict[str, Any]]] | None = None,
+    limit: int = 12,
+) -> list[RetrievedChunk]:
+    """Backwards-compatible wrapper returning only the ranked chunks."""
+    return hybrid_retrieve_with_stats(
+        settings=settings,
+        question=question,
+        repository_ids=repository_ids,
+        embedding=embedding,
+        client=client,
+        chunks_by_repo=chunks_by_repo,
+        limit=limit,
+    ).chunks

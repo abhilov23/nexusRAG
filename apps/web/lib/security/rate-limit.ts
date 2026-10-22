@@ -102,6 +102,17 @@ export const RATE_LIMITS = {
   readQueue: { limit: 120, windowSeconds: 60 },
   /** Each question costs an LLM call plus a vector search. */
   ask: { limit: 30, windowSeconds: 60 },
+  /**
+   * Benchmark questions are already gated by a server-created run and are
+   * sequential, so they need a higher ceiling than interactive chat.
+   */
+  evaluationAsk: { limit: 60, windowSeconds: 60 },
+  /** Starting a benchmark is cheap, but each run consumes many LLM calls. */
+  benchmarkStart: { limit: 20, windowSeconds: 60 * 60 },
+  /** Thumbs up/down is a small write; generous but still bounded. */
+  feedback: { limit: 120, windowSeconds: 60 },
+  /** The judge is an LLM call of its own. */
+  judge: { limit: 30, windowSeconds: 60 },
   /** Public status page: two cheap pings, but still bounded. */
   status: { limit: 60, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitRule>;

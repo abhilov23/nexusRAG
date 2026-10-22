@@ -77,6 +77,14 @@ class Settings(BaseSettings):
     llm_base_url: str = Field(default="https://api.openai.com/v1", alias="LLM_BASE_URL")
     llm_model: str = Field(default="gpt-4o-mini", alias="LLM_MODEL")
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
+    # Cost telemetry, not billing. Keep these aligned with the configured model
+    # so the dashboard shows a real estimate instead of a hardcoded number.
+    llm_input_cost_per_1m: float = Field(
+        default=0.15, alias="LLM_INPUT_COST_PER_1M"
+    )
+    llm_output_cost_per_1m: float = Field(
+        default=0.60, alias="LLM_OUTPUT_COST_PER_1M"
+    )
 
     embedding_base_url: str | None = Field(default=None, alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
@@ -119,6 +127,18 @@ class Settings(BaseSettings):
     def resolved_embedding_base_url(self) -> str:
         """Embeddings default to the LLM host: they are usually the same vendor."""
         return self.embedding_base_url or self.llm_base_url
+
+    def estimate_llm_cost(self, prompt_tokens: int, completion_tokens: int) -> float:
+        """Estimated USD cost from configured per-million token rates.
+
+        This is intentionally an estimate: providers bill cached tokens,
+        reasoning tokens and rounding differently. The dashboard labels it as
+        an estimate rather than pretending it is an invoice.
+        """
+        return (
+            prompt_tokens / 1_000_000 * self.llm_input_cost_per_1m
+            + completion_tokens / 1_000_000 * self.llm_output_cost_per_1m
+        )
 
     def require_storage(self) -> tuple[str, str, str, str]:
         """Return (endpoint, access_key, secret_key, bucket), whichever provider is set.

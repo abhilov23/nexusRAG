@@ -18,6 +18,8 @@ model User {
     accounts OAuthAccount[]
     settings UserSettings?
     repositories Repository[]
+    queryLogs QueryLog[]
+    evaluationRuns EvaluationRun[]
 }
 
 model OAuthAccount {
@@ -118,7 +120,127 @@ model Repository {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
+    queryLogs QueryLog[]
+    evaluationRuns EvaluationRun[]
+
     @@unique([userId, owner, name])
     @@index([userId])
+    @@index([status])
+}
+
+/// One persisted RAG request, whether it came from chat or a benchmark.
+///
+/// The scalar timings and token counts are columns rather than JSON because the
+/// dashboard aggregates them. `trace` and `sources` are JSON because they are
+/// read as a whole by the trace drawer and never filtered on.
+model QueryLog {
+    id     String @id @default(cuid())
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    /// Null when the question spanned every READY repository.
+    repositoryId String?
+    repository   Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+
+    evaluationRunId   String?
+    evaluationRun     EvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
+    evalQuestionIndex Int?
+
+    mode   QueryMode @default(CHAT)
+    status QueryStatus
+
+    question String
+    answer   String?
+    /// Sanitized client-facing reason; never the upstream exception.
+    errorMessage String?
+
+    grounded Boolean @default(false)
+    model    String?
+
+    latencyMs           Int?
+    retrievalLatencyMs  Int?
+    generationLatencyMs Int?
+
+    promptTokens     Int @default(0)
+    completionTokens Int @default(0)
+    totalTokens      Int @default(0)
+    /// Estimated USD, from configured per-million token rates.
+    costUsd          Float @default(0)
+
+    sourceCount Int @default(0)
+
+    /// Source list and full retrieval trace, stored for the trace drawer.
+    sources Json?
+    /// Exact prompt/context sent to the answer model, capped before storage.
+    context String?
+    trace   Json?
+
+    /// Ground-truth evaluation fields. Null outside labelled benchmark runs.
+    expectedPaths  String[] @default([])
+    retrievalK     Int?
+    recallAtK      Float?
+    precisionAtK   Float?
+    mrr            Float?
+
+    /// Model-judged answer quality. Explicitly not ground truth.
+    faithfulness   Float?
+    relevance      Float?
+    judgeRationale String?
+    judgedAt       DateTime?
+
+    /// -1 = negative, 1 = positive, null = not rated.
+    feedback   Int?
+    feedbackAt DateTime?
+
+    createdAt DateTime @default(now())
+
+    @@index([userId, createdAt])
+    @@index([repositoryId, createdAt])
+    @@index([evaluationRunId])
+    @@index([userId, mode, createdAt])
+}
+
+enum QueryStatus {
+    SUCCESS
+    ERROR
+}
+
+enum QueryMode {
+    CHAT
+    EVALUATION
+}
+
+enum EvaluationRunStatus {
+    RUNNING
+    COMPLETED
+    CANCELLED
+    FAILED
+}
+
+/// A labelled benchmark: one fixed question set against one repository.
+/// `questions` stores [{ question, expectedPaths }] so the server, not the
+/// browser, owns the ground truth used to compute Recall@K.
+model EvaluationRun {
+    id     String @id @default(cuid())
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    repositoryId String
+    repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+    name         String?
+    status       EvaluationRunStatus @default(RUNNING)
+    retrievalK   Int                 @default(10)
+    judgeAnswers Boolean             @default(true)
+    questions    Json
+
+    startedAt   DateTime  @default(now())
+    completedAt DateTime?
+    createdAt   DateTime  @default(now())
+
+    queries QueryLog[]
+
+    @@index([userId, createdAt])
+    @@index([repositoryId, createdAt])
     @@index([status])
 }

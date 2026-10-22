@@ -285,11 +285,39 @@ export default function GraphPage() {
     URL.revokeObjectURL(url);
   }, [repositoryId]);
 
-  const handleWheel = useCallback((event: React.WheelEvent) => {
-    if (event.ctrlKey || event.metaKey) {
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    // React attaches wheel listeners passively, so preventDefault there does
+    // not stop the browser's page zoom. Pinch gestures on a trackpad arrive as
+    // Ctrl+wheel, so a capture-phase non-passive listener keeps both trackpad
+    // pinch and Ctrl/Cmd+wheel scoped to the graph. Safari reports separate
+    // gesture events, which need the same treatment.
+    const insideGraph = (target: EventTarget | null) =>
+      target instanceof Node && node.contains(target);
+
+    const onWheel = (event: WheelEvent) => {
+      if (!insideGraph(event.target)) return;
+      if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
+      event.stopPropagation();
       setZoom((z) => Math.min(Math.max(z * (event.deltaY > 0 ? 0.9 : 1.1), 0.3), 3));
-    }
+    };
+
+    const blockGesture = (event: Event) => {
+      if (!insideGraph(event.target)) return;
+      event.preventDefault();
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    node.addEventListener("gesturestart", blockGesture, { passive: false });
+    node.addEventListener("gesturechange", blockGesture, { passive: false });
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+      node.removeEventListener("gesturestart", blockGesture);
+      node.removeEventListener("gesturechange", blockGesture);
+    };
   }, []);
 
   const handleMouseDown = useCallback(
@@ -426,12 +454,11 @@ export default function GraphPage() {
           <div
             ref={containerRef}
             className="relative h-[560px] overflow-hidden rounded-2xl border border-[var(--nx-border)] bg-[var(--nx-surface)]"
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            style={{ cursor: "grab" }}
+            style={{ cursor: "grab", touchAction: "pan-x pan-y" }}
           >
             <svg className="absolute inset-0 h-full w-full">
               <defs>
@@ -624,7 +651,7 @@ export default function GraphPage() {
               ))}
             </div>
             <p className="pointer-events-none absolute right-3 bottom-3 hidden font-mono text-[10px] text-[var(--nx-faint)] sm:block">
-              Ctrl + scroll to zoom · drag to pan
+              Pinch or Ctrl + scroll to zoom · drag to pan
             </p>
           </div>
 
