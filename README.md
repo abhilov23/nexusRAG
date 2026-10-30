@@ -1,6 +1,4 @@
-# NexusRAG
-
-> Repository intelligence: ask questions about a codebase and get answers grounded in the actual source.
+<img width="2800" height="560" alt="nexusrag-hero-banner" src="https://github.com/user-attachments/assets/4ffb93d7-9040-4011-b45c-6dacd0b4b39f" />
 
 Large repositories do not fit in a model's context window, and pasting one in
 would be slow, expensive and mostly noise. NexusRAG takes the other route: it
